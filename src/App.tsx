@@ -277,6 +277,23 @@ function getUrlParameter(name: string): string | null {
   return urlParams.get(name);
 }
 
+function updateUrlParameters(params: Record<string, string | null>) {
+  const url = new URL(window.location.href);
+  
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === null) {
+      url.searchParams.delete(key);
+    } else {
+      url.searchParams.set(key, value);
+    }
+  });
+  
+  // Only push state if the URL actually changed
+  if (url.toString() !== window.location.href) {
+    window.history.pushState({}, '', url.toString());
+  }
+}
+
 async function fetchTreeFromUrl(url: string): Promise<TechTree> {
   try {
     const response = await fetch(url);
@@ -304,6 +321,41 @@ function LoadedApp() {
   let fileInputRef = useRef<HTMLInputElement>(null);
   let [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
+  // Initialize state from URL parameters
+  useEffect(() => {
+    const initialRootNodeId = getUrlParameter('root');
+    const initialSelectedNodeId = getUrlParameter('selected');
+    
+    if (initialRootNodeId) {
+      setRootNodeId(initialRootNodeId);
+    }
+    if (initialSelectedNodeId) {
+      setSelectedNodeId(initialSelectedNodeId);
+    }
+  }, []);
+
+  // Listen for browser navigation (back/forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      const urlRootNodeId = getUrlParameter('root');
+      const urlSelectedNodeId = getUrlParameter('selected');
+      
+      setRootNodeId(urlRootNodeId);
+      setSelectedNodeId(urlSelectedNodeId);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update URL when rootNodeId changes
+  useEffect(() => {
+    updateUrlParameters({ 
+      root: rootNodeId,
+      selected: rootNodeId ? selectedNodeId : null 
+    });
+  }, [rootNodeId, selectedNodeId]);
+
   // Load the default tree
   useEffect(() => {
     const urlParam = getUrlParameter("url") || "./trees/default.json";
@@ -315,9 +367,18 @@ function LoadedApp() {
         setTreeHistory([validatedTree]);
         setTreeIndex(0);
 
-        // Reset UI state
-        setRootNodeId(null);
-        setSelectedNodeId(null);
+        // Reset UI state but preserve URL parameters
+        const urlRootNodeId = getUrlParameter('root');
+        const urlSelectedNodeId = getUrlParameter('selected');
+        
+        // Only reset if the URL doesn't specify nodes
+        if (!urlRootNodeId) {
+          setRootNodeId(null);
+        }
+        if (!urlSelectedNodeId) {
+          setSelectedNodeId(null);
+        }
+        
         setError(null);
       })
       .catch((err) => {
@@ -360,6 +421,8 @@ function LoadedApp() {
       setRootNodeId(rootNodeId);
     }
   }, [selectedNodeId, subtree]);
+
+
 
   useEffect(() => {
     mermaid.initialize({
@@ -548,6 +611,8 @@ function LoadedApp() {
     setTreeIndex(0);
     setSelectedNodeId(null);
     setRootNodeId(null);
+    // Clear URL parameters when creating new tree
+    updateUrlParameters({ root: null, selected: null });
   };
 
   const openFileDialog = () => {
@@ -687,6 +752,7 @@ function LoadedApp() {
             nodeId={selectedNodeId}
             fullTree={tree}
             onClose={() => setSelectedNodeId(null)}
+            onRootSelect={setRootNodeId}
             onNodeSelect={setSelectedNodeId}
             onUpdateNode={updateNode}
             onDeleteNode={deleteNode}
@@ -816,6 +882,7 @@ interface NodeViewerProps {
   nodeId: TechNodeId;
   fullTree: TechTree;
   onClose: () => void;
+  onRootSelect: (nodeId: TechNodeId) => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
   onDeleteNode: (id: TechNodeId) => void;
@@ -825,6 +892,7 @@ function NodeViewer({
   nodeId,
   fullTree,
   onClose,
+  onRootSelect,
   onNodeSelect,
   onUpdateNode,
   onDeleteNode,
@@ -983,6 +1051,13 @@ function NodeViewer({
           <h2 className="text-lg font-semibold text-gray-900">{node.title}</h2>
         )}
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => onRootSelect(nodeId)}
+            className="p-1 hover:bg-gray-100 text-xs text-gray-600 underline hover:text-gray-700 rounded"
+            title="Focus as root"
+          >
+            Focus
+          </button>
           <button
             onClick={handleDelete}
             className="p-1 hover:bg-gray-100 rounded"
