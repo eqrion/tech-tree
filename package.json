@@ -7,15 +7,17 @@
     "copy-files": "cp pages/index.html dist",
     "clean": "rm -rf dist",
     "typecheck": "tsc --jsx react",
-    "watch": "nodemon --watch 'pages/**/*' --watch 'src/**/*' --ext 'html,css,ts,tsx' --exec 'npm run build'"
-    ,
+    "watch": "nodemon --watch 'pages/**/*' --watch 'src/**/*' --ext 'html,css,ts,tsx' --exec 'npm run build'",
     "format": "prettier --write 'src/**/*.{ts,tsx}' 'pages/**/*.{html,css}'"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
+    "@types/mermaid": "^9.1.0",
+    "mermaid": "^11.9.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.11",
+    "type-fest": "^4.41.0",
     "typescript": "^5.4.5"
   },
   "devDependencies": {
