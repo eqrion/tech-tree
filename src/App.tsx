@@ -420,29 +420,94 @@ let initialTreeRaw = {
 let initialTree = validate(initialTreeRaw);
 let initialTreeHistory = [initialTree];
 
+// Add helper functions for URL handling
+function getUrlParameter(name: string): string | null {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(name);
+}
+
+async function fetchTreeFromUrl(url: string): Promise<TechTree> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return validate(data);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to load from URL: ${error.message}`);
+    }
+    throw new Error(`Failed to load from URL: Unknown error`);
+  }
+}
+
 function LoadedApp() {
   let [treeHistory, setTreeHistory] = useState<TechTree[]>(initialTreeHistory);
   let [treeIndex, setTreeIndex] = useState<number>(0);
-  const tree = treeHistory[treeIndex];
+  let tree = treeHistory[treeIndex];
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
-  const [showAddNodeModal, setShowAddNodeModal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<TechNodeId | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  let [showAddNodeModal, setShowAddNodeModal] = useState(false);
+  let [error, setError] = useState<string | null>(null);
+  let [selectedNodeId, setSelectedNodeId] = useState<TechNodeId | null>(null);
+  let fileInputRef = useRef<HTMLInputElement>(null);
+  let [isLoadingUrl, setIsLoadingUrl] = useState(false);
+
+  // Check for URL parameter on mount
+  useEffect(() => {
+    const urlParam = getUrlParameter("url");
+    if (urlParam) {
+      setIsLoadingUrl(true);
+      fetchTreeFromUrl(urlParam)
+        .then((validatedTree) => {
+          // Successfully loaded and validated - add to history
+          setTreeHistory([validatedTree]);
+          setTreeIndex(0);
+
+          // Reset UI state
+          setRootNodeId(null);
+          setSelectedNodeId(null);
+          setError(null);
+        })
+        .catch((err) => {
+          console.error("Error loading from URL:", err);
+          setError(
+            err instanceof Error ? err.message : "Failed to load from URL",
+          );
+        })
+        .finally(() => {
+          setIsLoadingUrl(false);
+        });
+    }
+  }, []); // Empty dependency array - only run on mount
 
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
       return null;
     }
+    if (!tree.nodes.find((x) => x.id === rootNodeId)) {
+      setRootNodeId(null);
+      setSelectedNodeId(null);
+    }
     return subgraph(tree, rootNodeId);
   }, [tree, rootNodeId]);
+
+  if (!tree.nodes.find((x) => x.id === rootNodeId)) {
+    rootNodeId = null;
+  }
+  if (!tree.nodes.find((x) => x.id === selectedNodeId)) {
+    selectedNodeId = null;
+  }
 
   useEffect(() => {
     if (!selectedNodeId || !subtree) {
       return;
     }
-    if (!subtree.nodes.find((x) => x.id === selectedNodeId)) {
-      setRootNodeId(findRootNodeOf(tree, selectedNodeId));
+    if (!tree.nodes.find((x) => x.id === selectedNodeId)) {
+      setSelectedNodeId(null);
+    } else if (!subtree.nodes.find((x) => x.id === selectedNodeId)) {
+      let rootNodeId = findRootNodeOf(tree, selectedNodeId);
+      setRootNodeId(rootNodeId);
     }
   }, [selectedNodeId, subtree]);
 
@@ -544,6 +609,11 @@ function LoadedApp() {
       let newTreeIndex = newTreeHistory.length;
       setTreeHistory([...newTreeHistory, newTree]);
       setTreeIndex(newTreeIndex);
+      if (!rootNodeId) {
+        setRootNodeId(newNode.id);
+      } else if (!selectedNodeId) {
+        setSelectedNodeId(newNode.id);
+      }
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to add node");
@@ -633,6 +703,12 @@ function LoadedApp() {
         <div className="flex items-center gap-2">
           <img src="./favicon.svg" alt="Tech Tree" className="w-6 h-6" />
           <h1 className="text-xl font-semibold">Tech Tree</h1>
+          {isLoadingUrl && (
+            <div className="ml-4 flex items-center gap-2 text-sm text-blue-600">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              Loading from URL...
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {rootNodeId && (
@@ -1313,7 +1389,6 @@ function Subgraph(props: SubgraphProps) {
           n.id === originalNodeId ||
           n.id.replace(/[^a-zA-Z0-9_]/g, "_") === nodeId,
       );
-      console.log(`click ${originalNodeId}`);
       if (node) {
         props.onNodeSelect(node.id);
       }
@@ -1551,7 +1626,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
   };
 
   return (
-    <Modal onClose={onClose} className="max-w-2xl">
+    <Modal onClose={onClose} className="w-[80vh] h-[80vh]">
       <form onSubmit={handleSubmit} className="p-6">
         <h2 className="text-xl font-semibold mb-4">Add New Node</h2>
 
@@ -1568,7 +1643,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter node title..."
+            placeholder="Enter title..."
             required
           />
         </div>
@@ -1586,7 +1661,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
             onChange={(e) => setDescription(e.target.value)}
             rows={6}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
-            placeholder="Enter node description (markdown supported)..."
+            placeholder="Enter markdown description..."
             required
           />
         </div>
