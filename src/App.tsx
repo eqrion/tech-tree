@@ -10,7 +10,10 @@ import {
   rootNodes,
   subgraph,
   clone,
+  canonicalize,
   updateRefsToId,
+  deleteRefsToId,
+  findRootNodeOf,
 } from "./TechTree.js";
 import mermaid from "mermaid";
 import markdownit from "markdown-it";
@@ -91,6 +94,117 @@ const Modal: React.FC<ModalProps> = ({
   );
 
   return createPortal(modalContent, document.body);
+};
+
+interface ConfirmModalProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  variant?: "danger" | "warning" | "info";
+}
+
+const ConfirmModal: React.FC<ConfirmModalProps> = ({
+  isOpen,
+  title,
+  message,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  onConfirm,
+  onCancel,
+  variant = "info",
+}) => {
+  const [focusedButton, setFocusedButton] = useState<"confirm" | "cancel">(
+    "cancel",
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (focusedButton === "confirm") {
+          onConfirm();
+        } else {
+          onCancel();
+        }
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        setFocusedButton((prev) => (prev === "confirm" ? "cancel" : "confirm"));
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, focusedButton, onConfirm, onCancel]);
+
+  if (!isOpen) return null;
+
+  const getVariantStyles = () => {
+    switch (variant) {
+      case "danger":
+        return {
+          icon: "🗑️",
+          confirmClass: "bg-red-600 hover:bg-red-700 focus:ring-red-500",
+          iconColor: "text-red-500",
+        };
+      case "warning":
+        return {
+          icon: "⚠️",
+          confirmClass:
+            "bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500",
+          iconColor: "text-yellow-500",
+        };
+      default:
+        return {
+          icon: "ℹ️",
+          confirmClass: "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500",
+          iconColor: "text-blue-500",
+        };
+    }
+  };
+
+  const styles = getVariantStyles();
+
+  return (
+    <Modal onClose={onCancel} allowDismiss={true} className="max-w-md">
+      <div className="p-6">
+        <div className="flex items-center mb-4">
+          <div className={`text-2xl mr-3 ${styles.iconColor}`}>
+            {styles.icon}
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        </div>
+
+        <p className="text-gray-700 mb-6 leading-relaxed">{message}</p>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className={`px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+              focusedButton === "cancel" ? "ring-2 ring-gray-500" : ""
+            }`}
+            onFocus={() => setFocusedButton("cancel")}
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 text-white rounded transition-colors focus:outline-none focus:ring-2 ${styles.confirmClass} ${
+              focusedButton === "confirm" ? "ring-2" : ""
+            }`}
+            onFocus={() => setFocusedButton("confirm")}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 };
 
 class ErrorBoundary extends React.Component<
@@ -303,9 +417,12 @@ let initialTreeRaw = {
   ],
 };
 let initialTree = validate(initialTreeRaw);
+let initialTreeHistory = [initialTree];
 
 function LoadedApp() {
-  let [tree, setTree] = useState<TechTree>(initialTree);
+  let [treeHistory, setTreeHistory] = useState<TechTree[]>(initialTreeHistory);
+  let [treeIndex, setTreeIndex] = useState<number>(0);
+  const tree = treeHistory[treeIndex];
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -323,7 +440,7 @@ function LoadedApp() {
       return;
     }
     if (!subtree.nodes.find((x) => x.id === selectedNodeId)) {
-      setSelectedNodeId(null);
+      setRootNodeId(findRootNodeOf(tree, selectedNodeId));
     }
   }, [selectedNodeId, subtree]);
 
@@ -339,22 +456,49 @@ function LoadedApp() {
   }, []);
 
   const updateNode = (previousId: TechNodeId, newNode: TechNode) => {
-    let newTree = clone(tree);
-    let newIndex = newTree.nodes.findIndex((v) => v.id === newNode.id);
-    if (newIndex === -1) {
-      newTree.nodes.push(newNode);
-    } else {
-      newTree.nodes[newIndex] = newNode;
-    }
-    updateRefsToId(newTree, previousId, newNode.id);
     try {
+      let newTree = clone(tree);
+      let newIndex = newTree.nodes.findIndex((v) => v.id === newNode.id);
+      if (newIndex === -1) {
+        newTree.nodes.push(newNode);
+      } else {
+        newTree.nodes[newIndex] = newNode;
+      }
+      updateRefsToId(newTree, previousId, newNode.id);
       newTree = validate(newTree);
+      let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1)];
+      let newTreeIndex = newTreeHistory.length;
+      setTreeHistory([...newTreeHistory, newTree]);
+      setTreeIndex(newTreeIndex);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to update node");
       return;
     }
-    setTree(newTree);
+  };
+
+  const deleteNode = (id: TechNodeId) => {
+    try {
+      let newTree = clone(tree);
+      let oldIndex = newTree.nodes.findIndex((x) => x.id === id);
+      newTree.nodes.splice(oldIndex, 1);
+      deleteRefsToId(newTree, id);
+      newTree = validate(newTree);
+      let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1)];
+      let newTreeIndex = newTreeHistory.length;
+      setTreeHistory([...newTreeHistory, newTree]);
+      setTreeIndex(newTreeIndex);
+      if (rootNodeId === id) {
+        setRootNodeId(null);
+      }
+      if (selectedNodeId === id) {
+        setSelectedNodeId(null);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to update node");
+      return;
+    }
   };
 
   const addNode = (title: string, description: string) => {
@@ -393,48 +537,141 @@ function LoadedApp() {
         newNode.dependedOnBy.push(blocking);
       }
       newTree = validate(newTree);
-      setTree(newTree);
+
+      let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1)];
+      let newTreeIndex = newTreeHistory.length;
+      setTreeHistory([...newTreeHistory, newTree]);
+      setTreeIndex(newTreeIndex);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to add node");
     }
   };
 
+  const saveToFile = () => {
+    const dataStr = JSON.stringify(canonicalize(tree), null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `tech-tree-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
+  const handleUndo = () => {
+    if (treeIndex > 0) {
+      setTreeIndex(treeIndex - 1);
+    }
+  };
+
+  const handleRedo = () => {
+    if (treeIndex < treeHistory.length - 1) {
+      setTreeIndex(treeIndex + 1);
+    }
+  };
+
+  const handleUndoAll = () => {
+    setTreeIndex(0);
+  };
+
+  const canUndo = treeIndex > 0;
+  const canRedo = treeIndex < treeHistory.length - 1;
+
   return (
     <div className="w-full h-full flex flex-col">
       <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Technology Tree</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAddNodeModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Add Node
-          </button>
+          <h1 className="text-xl font-semibold">Tech Tree</h1>
+        </div>
+        <div className="flex items-center gap-2">
           {rootNodeId && (
             <button
               onClick={() => {
                 setRootNodeId(null);
                 setSelectedNodeId(null);
               }}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+              className="mx-6 text-sm text-blue-600 hover:text-blue-800 hover:underline"
             >
-              Back to Tree Selection
+              ← Back to Tree Selection
             </button>
           )}
+          {/* History controls */}
+          <div className="flex items-center gap-1 mr-2">
+            {treeIndex !== 0 && (
+              <div className="px-3 py-1 text-xs bg-orange-100 text-orange-700 border border-orange-200 rounded mr-2 flex items-center gap-1">
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.316 15.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                </svg>
+                Unsaved changes
+              </div>
+            )}
+            <button
+              onClick={handleUndoAll}
+              disabled={!canUndo}
+              className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+              title="Undo all changes"
+            >
+              Undo All
+            </button>
+            <button
+              onClick={handleUndo}
+              disabled={!canUndo}
+              className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+              title="Undo last change"
+            >
+              Undo
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={!canRedo}
+              className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+              title="Redo last undone change"
+            >
+              Redo
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowAddNodeModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Add Node
+          </button>
+
+          <button
+            onClick={saveToFile}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            title="Download current tree as JSON"
+          >
+            Download
+          </button>
         </div>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 bg-gray-50">
         {!rootNodeId && (
-          <RootNodePicker fullTree={tree} onPickRoot={setRootNodeId} />
+          <NodePicker fullTree={tree} onPickNode={setRootNodeId} />
         )}
         {rootNodeId && (
           <Subgraph
-            onUpdateNode={updateNode}
             fullTree={tree}
             subTree={subtree as TechTree}
             selectedNodeId={selectedNodeId}
             onNodeSelect={setSelectedNodeId}
+            onUpdateNode={updateNode}
+            onDeleteNode={deleteNode}
           />
         )}
       </div>
@@ -449,12 +686,12 @@ function LoadedApp() {
   );
 }
 
-interface RootNodePickerProps {
+interface NodePickerProps {
   fullTree: TechTree;
-  onPickRoot: (id: TechNodeId) => void;
+  onPickNode: (id: TechNodeId) => void;
 }
 
-function RootNodePicker(props: RootNodePickerProps) {
+function NodePicker(props: NodePickerProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
   const roots = useMemo(() => rootNodes(props.fullTree), [props.fullTree]);
@@ -470,7 +707,7 @@ function RootNodePicker(props: RootNodePickerProps) {
   }, [roots, searchTerm]);
 
   return (
-    <div className="w-full h-full bg-gray-50 p-6">
+    <div className="w-full h-full p-6">
       <div className="max-w-4xl mx-auto">
         {/* Search Box */}
         <div className="relative mb-6">
@@ -491,7 +728,7 @@ function RootNodePicker(props: RootNodePickerProps) {
           </div>
           <input
             type="text"
-            placeholder="Search technology trees..."
+            placeholder="Search tech trees..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
@@ -504,15 +741,15 @@ function RootNodePicker(props: RootNodePickerProps) {
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg">
                 {searchTerm
-                  ? "No technology trees match your search."
-                  : "No technology trees available."}
+                  ? "No tech trees match your search."
+                  : "No tech trees available."}
               </p>
             </div>
           ) : (
             filteredRoots.map((node) => (
               <div
                 key={node.id}
-                onClick={() => props.onPickRoot(node.id)}
+                onClick={() => props.onPickNode(node.id)}
                 className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all duration-200"
               >
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -530,58 +767,55 @@ function RootNodePicker(props: RootNodePickerProps) {
   );
 }
 
+interface NodePickerModalProps {
+  fullTree: TechTree;
+  onPickNode: (id: TechNodeId) => void;
+  onClose: () => void;
+}
+
+function NodePickerModal({
+  fullTree,
+  onPickNode,
+  onClose,
+}: NodePickerModalProps) {
+  const handlePickNode = (id: TechNodeId) => {
+    onPickNode(id);
+    onClose();
+  };
+
+  return (
+    <Modal onClose={onClose} className="max-w-6xl max-h-[90vh]">
+      <div className="p-6">
+        <div className="h-96 overflow-y-auto">
+          <NodePicker fullTree={fullTree} onPickNode={handlePickNode} />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 interface NodeViewerProps {
   nodeId: TechNodeId;
-  subTree: TechTree;
   fullTree: TechTree;
   onClose: () => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
+  onDeleteNode: (id: TechNodeId) => void;
 }
 
 function NodeViewer({
   nodeId,
-  subTree,
+  fullTree,
   onClose,
   onNodeSelect,
   onUpdateNode,
+  onDeleteNode,
 }: NodeViewerProps) {
-  const node = subTree.nodes.find((n) => n.id === nodeId);
-
-  if (!node) {
-    return (
-      <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Node not found
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded"
-            title="Close"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  const node = fullTree.nodes.find((n) => n.id === nodeId) as TechNode;
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(node.title);
   const [editedDescription, setEditedDescription] = useState(node.description);
+  const [showNodePicker, setShowNodePicker] = useState(false);
   const updateTimeoutRef = useRef<number | null>(null);
 
   // Reset edited values when node changes
@@ -665,6 +899,57 @@ function NodeViewer({
     setIsEditing(!isEditing);
   };
 
+  const handleAddDependency = (dependencyId: TechNodeId) => {
+    const updatedNode = {
+      ...node,
+      dependsOn: [...node.dependsOn, dependencyId],
+    };
+    onUpdateNode(node.id, updatedNode);
+  };
+
+  const handleRemoveDependency = (dependencyId: TechNodeId) => {
+    const updatedNode = {
+      ...node,
+      dependsOn: node.dependsOn.filter((id) => id !== dependencyId),
+    };
+    onUpdateNode(node.id, updatedNode);
+  };
+
+  const handleDelete = () => {
+    onDeleteNode(node.id);
+  };
+
+  // Simple cycle detection helper
+  const wouldCreateCycle = (
+    tree: TechTree,
+    fromId: TechNodeId,
+    toId: TechNodeId,
+  ): boolean => {
+    const visited = new Set<TechNodeId>();
+
+    const hasPath = (currentId: TechNodeId, targetId: TechNodeId): boolean => {
+      if (currentId === targetId) return true;
+      if (visited.has(currentId)) return false;
+
+      visited.add(currentId);
+      const currentNode = tree.nodes.find((n) => n.id === currentId);
+      if (!currentNode) return false;
+
+      return currentNode.dependsOn.some((depId) => hasPath(depId, targetId));
+    };
+
+    return hasPath(toId, fromId);
+  };
+
+  // Filter out nodes that are already dependencies or would create cycles
+  const availableNodes = fullTree.nodes.filter(
+    (n) =>
+      n.id !== node.id &&
+      !node.dependsOn.includes(n.id) &&
+      // Prevent cycles by not allowing nodes that depend on this node
+      !wouldCreateCycle(fullTree, node.id, n.id),
+  );
+
   return (
     <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -680,6 +965,26 @@ function NodeViewer({
           <h2 className="text-lg font-semibold text-gray-900">{node.title}</h2>
         )}
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleDelete}
+            className="p-1 hover:bg-gray-100 rounded"
+            title="Delete node"
+          >
+            <svg
+              className="w-5 h-5 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+          </button>
+
           <button
             onClick={handleToggleEdit}
             className="p-1 hover:bg-gray-100 rounded"
@@ -737,7 +1042,13 @@ function NodeViewer({
         </div>
       </div>
       <div className="flex-1 p-4 overflow-y-auto">
-        <div className="mb-4">
+        {isEditing && (
+          <div className="mb-4 p-3 bg-blue-50 text-xs text-blue-600 rounded-md">
+            Changes are saved automatically as you type.
+          </div>
+        )}
+
+        <div className="mb-12">
           {isEditing ? (
             <textarea
               value={editedDescription}
@@ -750,52 +1061,82 @@ function NodeViewer({
           )}
         </div>
 
-        {isEditing && (
-          <div className="mb-4 p-3 bg-blue-50 rounded-md">
-            <p className="text-sm text-blue-700">
-              <strong>Preview ID:</strong>{" "}
-              {editedTitle
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/^-|-$/g, "") || "(empty)"}
-            </p>
-            <p className="text-xs text-blue-600 mt-1">
-              Changes are saved automatically as you type.
-            </p>
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-semibold text-gray-900">Dependencies:</h4>
           </div>
-        )}
 
-        {node.dependsOn.length > 0 && (
-          <div className="mb-4">
-            <h4 className="font-semibold text-gray-900 mb-2">Dependencies:</h4>
+          {node.dependsOn.length > 0 ? (
             <ul className="list-disc list-inside space-y-1">
               {node.dependsOn.map((depId) => {
-                const depNode = subTree.nodes.find((n) => n.id === depId);
+                const depNode = fullTree.nodes.find((n) => n.id === depId);
                 return (
-                  <li key={depId} className="text-gray-600 text-sm">
-                    {depNode ? (
+                  <li
+                    key={depId}
+                    className="text-gray-600 text-sm flex items-center justify-between"
+                  >
+                    <div className="flex-1">
+                      {depNode ? (
+                        <button
+                          onClick={() => onNodeSelect(depNode.id)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                        >
+                          {depNode.title}
+                        </button>
+                      ) : (
+                        <span className="text-gray-500">
+                          {depId} (not found)
+                        </span>
+                      )}
+                    </div>
+                    {isEditing && (
                       <button
-                        onClick={() => onNodeSelect(depNode.id)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                        onClick={() => handleRemoveDependency(depId)}
+                        className="ml-2 text-red-500 hover:text-red-700"
+                        title="Remove dependency"
                       >
-                        {depNode.title}
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
                       </button>
-                    ) : (
-                      depId
                     )}
                   </li>
                 );
               })}
             </ul>
-          </div>
-        )}
+          ) : (
+            <p className="text-gray-500 text-sm">No dependencies</p>
+          )}
+
+          {isEditing && (
+            <button
+              onClick={() => setShowNodePicker(true)}
+              className="mt-8 w-full px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+              disabled={availableNodes.length === 0}
+            >
+              {availableNodes.length === 0
+                ? "No nodes available"
+                : "Add Dependency"}
+            </button>
+          )}
+        </div>
 
         {node.dependedOnBy && node.dependedOnBy.length > 0 && (
           <div>
             <h4 className="font-semibold text-gray-900 mb-2">Blocks:</h4>
             <ul className="list-disc list-inside space-y-1">
               {node.dependedOnBy.map((depId) => {
-                const depNode = subTree.nodes.find((n) => n.id === depId);
+                const depNode = fullTree.nodes.find((n) => n.id === depId);
                 return (
                   <li key={depId} className="text-gray-600 text-sm">
                     {depNode ? (
@@ -806,7 +1147,9 @@ function NodeViewer({
                         {depNode.title}
                       </button>
                     ) : (
-                      depId
+                      <span className="text-gray-500">
+                        {depId} (not in current view)
+                      </span>
                     )}
                   </li>
                 );
@@ -815,6 +1158,14 @@ function NodeViewer({
           </div>
         )}
       </div>
+
+      {showNodePicker && (
+        <NodePickerModal
+          fullTree={{ nodes: availableNodes }}
+          onPickNode={handleAddDependency}
+          onClose={() => setShowNodePicker(false)}
+        />
+      )}
     </div>
   );
 }
@@ -859,9 +1210,10 @@ function mermaidGraph(tree: TechTree): string {
 interface SubgraphProps {
   subTree: TechTree;
   fullTree: TechTree;
-  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
   selectedNodeId: TechNodeId | null;
   onNodeSelect: (nodeId: TechNodeId | null) => void;
+  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
+  onDeleteNode: (nodeId: TechNodeId) => void;
 }
 
 function Subgraph(props: SubgraphProps) {
@@ -1105,10 +1457,10 @@ function Subgraph(props: SubgraphProps) {
         <NodeViewer
           nodeId={props.selectedNodeId}
           fullTree={props.fullTree}
-          subTree={props.subTree}
           onClose={() => props.onNodeSelect(null)}
           onNodeSelect={props.onNodeSelect}
           onUpdateNode={props.onUpdateNode}
+          onDeleteNode={props.onDeleteNode}
         />
       )}
     </div>

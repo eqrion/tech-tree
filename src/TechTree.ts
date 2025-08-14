@@ -116,6 +116,17 @@ export function clone(tree: TechTree): TechTree {
   };
 }
 
+export function canonicalize(tree: TechTree): TechTree {
+  tree = clone(tree);
+  tree.nodes.sort((a, b) => a.id.localeCompare(b.id));
+  // Sort dependency arrays by id
+  for (const node of tree.nodes) {
+    node.dependsOn.sort();
+    node.dependedOnBy.sort();
+  }
+  return tree;
+}
+
 export function updateRefsToId(
   tree: TechTree,
   previousId: TechNodeId,
@@ -138,6 +149,16 @@ export function updateRefsToId(
   }
 }
 
+export function deleteRefsToId(tree: TechTree, id: TechNodeId) {
+  for (const node of tree.nodes) {
+    // Remove from dependsOn array
+    node.dependsOn = node.dependsOn.filter((dep) => dep !== id);
+
+    // Remove from dependedOnBy array
+    node.dependedOnBy = node.dependedOnBy.filter((dep) => dep !== id);
+  }
+}
+
 // All nodes which are not depended on by another node
 export function rootNodes(tree: TechTree): TechNode[] {
   const dependedOnIds = new Set<TechNodeId>();
@@ -151,6 +172,43 @@ export function rootNodes(tree: TechTree): TechNode[] {
 
   // Return nodes that are not depended on by any other node
   return tree.nodes.filter((node) => !dependedOnIds.has(node.id));
+}
+
+// Try to find a root node of `node`
+export function findRootNodeOf(
+  tree: TechTree,
+  node: TechNodeId,
+): TechNodeId | null {
+  const visited = new Set<TechNodeId>();
+  const stack: TechNodeId[] = [node];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop()!;
+
+    if (visited.has(currentId)) {
+      continue;
+    }
+    visited.add(currentId);
+
+    const currentNode = tree.nodes.find((n) => n.id === currentId);
+    if (!currentNode) {
+      continue;
+    }
+
+    // If this node isn't depended on by anyone, it's a root
+    if (currentNode.dependedOnBy.length === 0) {
+      return currentId;
+    }
+
+    // Add dependencies to stack to continue searching
+    for (const dep of currentNode.dependedOnBy) {
+      if (!visited.has(dep)) {
+        stack.push(dep);
+      }
+    }
+  }
+
+  return null;
 }
 
 // Filter `tree` to only include nodes that are transitively depended on by root.
