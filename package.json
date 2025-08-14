@@ -4,7 +4,7 @@
     "build": "npm run typecheck && npm run build-js && npm run build-css && npm run copy-files",
     "build-js": "for source in App.tsx; do esbuild --bundle --format=esm src/$source --outdir=dist; done",
     "build-css": "npx @tailwindcss/cli -i ./pages/style.css -o ./dist/style.css",
-    "copy-files": "cp pages/index.html dist",
+    "copy-files": "cp pages/index.html pages/favicon.ico pages/favicon.svg dist",
     "clean": "rm -rf dist",
     "typecheck": "tsc --jsx react",
     "watch": "nodemon --watch 'pages/**/*' --watch 'src/**/*' --ext 'html,css,ts,tsx' --exec 'npm run build'",

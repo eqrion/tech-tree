@@ -15,6 +15,7 @@ import {
   deleteRefsToId,
   findRootNodeOf,
 } from "./TechTree.js";
+import { Splitter } from "./Splitter.js";
 import mermaid from "mermaid";
 import markdownit from "markdown-it";
 
@@ -85,7 +86,7 @@ const Modal: React.FC<ModalProps> = ({
       aria-modal="true"
     >
       <div
-        className={`bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-auto ${className}`}
+        className={`bg-white rounded-lg shadow-xl overflow-auto ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -427,6 +428,7 @@ function LoadedApp() {
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<TechNodeId | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
@@ -580,10 +582,56 @@ function LoadedApp() {
   const canUndo = treeIndex > 0;
   const canRedo = treeIndex < treeHistory.length - 1;
 
+  const handleFileLoad = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        const validatedTree = validate(parsed);
+
+        // Successfully loaded and validated - add to history
+        setTreeHistory([validatedTree]);
+        setTreeIndex(0);
+
+        // Reset UI state
+        setRootNodeId(null);
+        setSelectedNodeId(null);
+        setError(null);
+      } catch (err) {
+        console.error("Error loading file:", err);
+        setError(
+          err instanceof Error
+            ? `Failed to load file: ${err.message}`
+            : "Failed to load file: Invalid JSON or tree structure",
+        );
+      }
+    };
+
+    reader.onerror = () => {
+      setError("Failed to read file");
+    };
+
+    reader.readAsText(file);
+
+    // Reset the input so the same file can be loaded again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="w-full h-full flex flex-col">
       <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
+          <img src="./favicon.svg" alt="Tech Tree" className="w-6 h-6" />
           <h1 className="text-xl font-semibold">Tech Tree</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -651,6 +699,22 @@ function LoadedApp() {
             Add Node
           </button>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileLoad}
+            className="hidden"
+          />
+
+          <button
+            onClick={openFileDialog}
+            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            title="Open tree from JSON file"
+          >
+            Open
+          </button>
+
           <button
             onClick={saveToFile}
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
@@ -660,21 +724,34 @@ function LoadedApp() {
           </button>
         </div>
       </div>
-      <div className="flex-1 bg-gray-50">
-        {!rootNodeId && (
-          <NodePicker fullTree={tree} onPickNode={setRootNodeId} />
-        )}
-        {rootNodeId && (
-          <Subgraph
+      <Splitter direction="horizontal" initialSplit={66} className="flex-1">
+        <div className="bg-gray-50 w-full h-full">
+          {!rootNodeId && (
+            <NodePicker fullTree={tree} onPickNode={setRootNodeId} />
+          )}
+          {rootNodeId && (
+            <Subgraph
+              fullTree={tree}
+              subTree={subtree as TechTree}
+              selectedNodeId={selectedNodeId}
+              onNodeSelect={setSelectedNodeId}
+              onUpdateNode={updateNode}
+              onDeleteNode={deleteNode}
+            />
+          )}
+        </div>
+        {/* Side Panel */}
+        {selectedNodeId !== null && (
+          <NodeViewer
+            nodeId={selectedNodeId}
             fullTree={tree}
-            subTree={subtree as TechTree}
-            selectedNodeId={selectedNodeId}
+            onClose={() => setSelectedNodeId(null)}
             onNodeSelect={setSelectedNodeId}
             onUpdateNode={updateNode}
             onDeleteNode={deleteNode}
           />
         )}
-      </div>
+      </Splitter>
       {showAddNodeModal && (
         <AddNodeModal
           onClose={() => setShowAddNodeModal(false)}
@@ -784,9 +861,9 @@ function NodePickerModal({
   };
 
   return (
-    <Modal onClose={onClose} className="max-w-6xl max-h-[90vh]">
+    <Modal onClose={onClose} className="max-w-[80vh] max-h-[80vh]">
       <div className="p-6">
-        <div className="h-96 overflow-y-auto">
+        <div className="overflow-y-auto">
           <NodePicker fullTree={fullTree} onPickNode={handlePickNode} />
         </div>
       </div>
@@ -951,7 +1028,7 @@ function NodeViewer({
   );
 
   return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
+    <div className="w-full h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         {isEditing ? (
           <input
@@ -1225,6 +1302,7 @@ function Subgraph(props: SubgraphProps) {
   const [graphId] = useState(
     () => `graph-${Math.random().toString(36).substr(2, 9)}`,
   );
+  const previousWidthRef = useRef<number>(0);
 
   const handleNodeClick = useCallback(
     (nodeId: string) => {
@@ -1451,18 +1529,6 @@ function Subgraph(props: SubgraphProps) {
           }}
         />
       </div>
-
-      {/* Side Panel */}
-      {props.selectedNodeId && (
-        <NodeViewer
-          nodeId={props.selectedNodeId}
-          fullTree={props.fullTree}
-          onClose={() => props.onNodeSelect(null)}
-          onNodeSelect={props.onNodeSelect}
-          onUpdateNode={props.onUpdateNode}
-          onDeleteNode={props.onDeleteNode}
-        />
-      )}
     </div>
   );
 }
