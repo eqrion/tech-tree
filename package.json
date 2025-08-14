@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
+    "@types/markdown-it": "^14.1.2",
     "@types/mermaid": "^9.1.0",
+    "markdown-it": "^14.1.0",
     "mermaid": "^11.9.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.1",

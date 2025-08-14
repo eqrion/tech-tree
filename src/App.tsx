@@ -8,14 +8,29 @@ import {
   type TechNodeId,
   rootNodes,
   subgraph,
+  clone,
+  updateRefsToId,
 } from "./TechTree.js";
 import mermaid from "mermaid";
+import markdownit from "markdown-it";
+
+const md = markdownit();
 
 function LoadingSpinner() {
   return (
     <div className="w-full h-full flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
+  );
+}
+
+function Markdown(props: { text: string }) {
+  const htmlContent = useMemo(() => md.render(props.text), [props.text]);
+  return (
+    <div
+      dangerouslySetInnerHTML={{ __html: htmlContent }}
+      className="prose prose-sm max-w-none"
+    />
   );
 }
 
@@ -233,6 +248,7 @@ let initialTree = validate(initialTreeRaw);
 function AppInner() {
   let [tree, setTree] = useState<TechTree>(initialTree);
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
+
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
       return null;
@@ -251,8 +267,20 @@ function AppInner() {
     });
   }, []);
 
+  const updateNode = (previousId: TechNodeId, newNode: TechNode) => {
+    let newTree = clone(tree);
+    updateRefsToId(newTree, previousId, newNode.id);
+    let newIndex = newTree.nodes.findIndex((v) => v.id === newNode.id);
+    if (newIndex === -1) {
+      newTree.nodes.push(newNode);
+    } else {
+      newTree.nodes[newIndex] = newNode;
+    }
+    newTree = validate(newTree);
+  };
+
   if (!rootNodeId) {
-    return <RootNodePicker tree={tree} onPickRoot={setRootNodeId} />;
+    return <RootNodePicker fullTree={tree} onPickRoot={setRootNodeId} />;
   }
 
   return (
@@ -267,21 +295,25 @@ function AppInner() {
         </button>
       </div>
       <div className="flex-1">
-        <Graph tree={subtree as TechTree} />
+        <Subgraph
+          onUpdateNode={updateNode}
+          fullTree={tree}
+          subTree={subtree as TechTree}
+        />
       </div>
     </div>
   );
 }
 
 interface RootNodePickerProps {
-  tree: TechTree;
+  fullTree: TechTree;
   onPickRoot: (id: TechNodeId) => void;
 }
 
 function RootNodePicker(props: RootNodePickerProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const roots = useMemo(() => rootNodes(props.tree), [props.tree]);
+  const roots = useMemo(() => rootNodes(props.fullTree), [props.fullTree]);
 
   const filteredRoots = useMemo(() => {
     if (!searchTerm.trim()) return roots;
@@ -358,8 +390,97 @@ function RootNodePicker(props: RootNodePickerProps) {
   );
 }
 
-interface GraphProps {
-  tree: TechTree;
+interface SidePanelProps {
+  node: TechNode;
+  subTree: TechTree;
+  fullTree: TechTree;
+  onClose: () => void;
+  onNodeSelect: (node: TechNode) => void;
+  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
+}
+
+function SidePanel({ node, subTree, onClose, onNodeSelect }: SidePanelProps) {
+  return (
+    <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">{node.title}</h2>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded"
+          title="Close"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="mb-4">
+          <Markdown text={node.description} />
+        </div>
+
+        {node.dependsOn.length > 0 && (
+          <div className="mb-4">
+            <h4 className="font-semibold text-gray-900 mb-2">Dependencies:</h4>
+            <ul className="list-disc list-inside space-y-1">
+              {node.dependsOn.map((depId) => {
+                const depNode = subTree.nodes.find((n) => n.id === depId);
+                return (
+                  <li key={depId} className="text-gray-600 text-sm">
+                    {depNode ? (
+                      <button
+                        onClick={() => onNodeSelect(depNode)}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {depNode.title}
+                      </button>
+                    ) : (
+                      depId
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {node.dependedOnBy && node.dependedOnBy.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Blocks:</h4>
+            <ul className="list-disc list-inside space-y-1">
+              {node.dependedOnBy.map((depId) => {
+                const depNode = subTree.nodes.find((n) => n.id === depId);
+                return (
+                  <li key={depId} className="text-gray-600 text-sm">
+                    {depNode ? (
+                      <button
+                        onClick={() => onNodeSelect(depNode)}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {depNode.title}
+                      </button>
+                    ) : (
+                      depId
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function mermaidGraph(tree: TechTree): string {
@@ -399,97 +520,13 @@ function mermaidGraph(tree: TechTree): string {
   return mermaid;
 }
 
-interface SidePanelProps {
-  node: TechNode;
-  tree: TechTree;
-  onClose: () => void;
-  onNodeSelect: (node: TechNode) => void;
+interface SubgraphProps {
+  subTree: TechTree;
+  fullTree: TechTree;
+  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
 }
 
-function SidePanel({ node, tree, onClose, onNodeSelect }: SidePanelProps) {
-  return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">Node Details</h2>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-gray-100 rounded"
-          title="Close"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-      <div className="flex-1 p-4 overflow-y-auto">
-        <h3 className="text-xl font-bold text-gray-900 mb-3">{node.title}</h3>
-        <p className="text-gray-700 leading-relaxed mb-4">{node.description}</p>
-
-        {node.dependsOn.length > 0 && (
-          <div className="mb-4">
-            <h4 className="font-semibold text-gray-900 mb-2">Dependencies:</h4>
-            <ul className="list-disc list-inside space-y-1">
-              {node.dependsOn.map((depId) => {
-                const depNode = tree.nodes.find((n) => n.id === depId);
-                return (
-                  <li key={depId} className="text-gray-600 text-sm">
-                    {depNode ? (
-                      <button
-                        onClick={() => onNodeSelect(depNode)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                      >
-                        {depNode.title}
-                      </button>
-                    ) : (
-                      depId
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {node.dependedOnBy && node.dependedOnBy.length > 0 && (
-          <div>
-            <h4 className="font-semibold text-gray-900 mb-2">Blocks:</h4>
-            <ul className="list-disc list-inside space-y-1">
-              {node.dependedOnBy.map((depId) => {
-                const depNode = tree.nodes.find((n) => n.id === depId);
-                return (
-                  <li key={depId} className="text-gray-600 text-sm">
-                    {depNode ? (
-                      <button
-                        onClick={() => onNodeSelect(depNode)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                      >
-                        {depNode.title}
-                      </button>
-                    ) : (
-                      depId
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Graph(props: GraphProps) {
+function Subgraph(props: SubgraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -504,7 +541,7 @@ function Graph(props: GraphProps) {
     (nodeId: string) => {
       // Convert sanitized ID back to original ID
       const originalNodeId = nodeId.replace(/_/g, "-");
-      const node = props.tree.nodes.find(
+      const node = props.subTree.nodes.find(
         (n) =>
           n.id === originalNodeId ||
           n.id.replace(/[^a-zA-Z0-9_]/g, "_") === nodeId,
@@ -514,7 +551,7 @@ function Graph(props: GraphProps) {
         setSelectedNode(node);
       }
     },
-    [props.tree],
+    [props.subTree],
   );
 
   // Function to highlight the selected node
@@ -553,7 +590,7 @@ function Graph(props: GraphProps) {
 
     const renderGraph = async () => {
       try {
-        const mermaidSyntax = mermaidGraph(props.tree);
+        const mermaidSyntax = mermaidGraph(props.subTree);
         const { svg } = await mermaid.render(graphId, mermaidSyntax);
 
         if (containerRef.current) {
@@ -615,7 +652,7 @@ function Graph(props: GraphProps) {
 
     renderGraph();
   }, [
-    props.tree,
+    props.subTree,
     graphId,
     handleNodeClick,
     selectedNode,
@@ -715,13 +752,16 @@ function Graph(props: GraphProps) {
       {selectedNode && (
         <SidePanel
           node={selectedNode}
-          tree={props.tree}
+          fullTree={props.fullTree}
+          subTree={props.subTree}
           onClose={() => setSelectedNode(null)}
           onNodeSelect={setSelectedNode}
+          onUpdateNode={props.onUpdateNode}
         />
       )}
     </div>
   );
 }
 
+createRoot(document.getElementById("root") as Element).render(<App />);
 createRoot(document.getElementById("root") as Element).render(<App />);

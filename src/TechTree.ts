@@ -104,6 +104,40 @@ export function validate(tree: object): TechTree {
   return candidate as TechTree;
 }
 
+export function clone(tree: TechTree): TechTree {
+  return {
+    nodes: tree.nodes.map((node) => ({
+      id: node.id,
+      title: node.title,
+      description: node.description,
+      dependsOn: [...node.dependsOn],
+      dependedOnBy: [...node.dependedOnBy],
+    })),
+  };
+}
+
+export function updateRefsToId(
+  tree: TechTree,
+  previousId: TechNodeId,
+  newId: TechNodeId,
+) {
+  for (const node of tree.nodes) {
+    // Update dependsOn array
+    for (let i = 0; i < node.dependsOn.length; i++) {
+      if (node.dependsOn[i] === previousId) {
+        node.dependsOn[i] = newId;
+      }
+    }
+
+    // Update dependedOnBy array
+    for (let i = 0; i < node.dependedOnBy.length; i++) {
+      if (node.dependedOnBy[i] === previousId) {
+        node.dependedOnBy[i] = newId;
+      }
+    }
+  }
+}
+
 // All nodes which are not depended on by another node
 export function rootNodes(tree: TechTree): TechNode[] {
   const dependedOnIds = new Set<TechNodeId>();
