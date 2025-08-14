@@ -16,6 +16,7 @@ import {
   findRootNodeOf,
 } from "./TechTree.js";
 import { Splitter } from "./Splitter.js";
+import Hamburger from "./Hamburger.js";
 import mermaid from "mermaid";
 import markdownit from "markdown-it";
 
@@ -693,9 +694,31 @@ function LoadedApp() {
     }
   };
 
+  const newTree = () => {
+    setTreeHistory([{ nodes: [] }]);
+    setTreeIndex(0);
+    setSelectedNodeId(null);
+    setRootNodeId(null);
+  };
+
   const openFileDialog = () => {
     fileInputRef.current?.click();
   };
+
+  const menuItems = [
+    {
+      label: "New",
+      onClick: newTree,
+    },
+    {
+      label: "Open",
+      onClick: openFileDialog,
+    },
+    {
+      label: "Download",
+      onClick: saveToFile,
+    },
+  ];
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -783,21 +806,7 @@ function LoadedApp() {
             className="hidden"
           />
 
-          <button
-            onClick={openFileDialog}
-            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
-            title="Open tree from JSON file"
-          >
-            Open
-          </button>
-
-          <button
-            onClick={saveToFile}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-            title="Download current tree as JSON"
-          >
-            Download
-          </button>
+          <Hamburger menuItems={menuItems} />
         </div>
       </div>
       <Splitter direction="horizontal" initialSplit={66} className="flex-1">
@@ -895,7 +904,7 @@ function NodePicker(props: NodePickerProps) {
               <p className="text-gray-500 text-lg">
                 {searchTerm
                   ? "No tech trees match your search."
-                  : "No tech trees available."}
+                  : "Add a node to get started."}
               </p>
             </div>
           ) : (
@@ -1628,7 +1637,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
   return (
     <Modal onClose={onClose} className="w-[80vh] h-[80vh]">
       <form onSubmit={handleSubmit} className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Add New Node</h2>
+        <h2 className="text-xl font-semibold mb-4">Add Node</h2>
 
         <div className="mb-4">
           <label
