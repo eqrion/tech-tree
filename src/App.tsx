@@ -75,7 +75,7 @@ export function App() {
   );
 }
 
-const initialTree: TechTree = {
+let initialTreeRaw = {
   nodes: [
     // Root 1: Quantum Flux Capacitor Systems
     {
@@ -228,10 +228,17 @@ const initialTree: TechTree = {
     },
   ],
 };
+let initialTree = validate(initialTreeRaw);
 
 function AppInner() {
   let [tree, setTree] = useState<TechTree>(initialTree);
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
+  const subtree = useMemo(() => {
+    if (rootNodeId === null) {
+      return null;
+    }
+    return subgraph(tree, rootNodeId);
+  }, [tree, rootNodeId]);
 
   useEffect(() => {
     mermaid.initialize({
@@ -248,7 +255,6 @@ function AppInner() {
     return <RootNodePicker tree={tree} onPickRoot={setRootNodeId} />;
   }
 
-  const subtree = subgraph(tree, rootNodeId);
   return (
     <div className="w-full h-full flex flex-col">
       <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
@@ -261,7 +267,7 @@ function AppInner() {
         </button>
       </div>
       <div className="flex-1">
-        <Graph tree={subtree} />
+        <Graph tree={subtree as TechTree} />
       </div>
     </div>
   );
@@ -359,6 +365,9 @@ interface GraphProps {
 function mermaidGraph(tree: TechTree): string {
   let mermaid = "graph TD\n";
 
+  // Check if any nodes have external dependencies
+  const nodeIds = new Set(tree.nodes.map((node) => node.id));
+
   // Add nodes with their titles as labels and click events
   for (const node of tree.nodes) {
     const sanitizedId = node.id.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -376,15 +385,28 @@ function mermaidGraph(tree: TechTree): string {
     }
   }
 
+  // Style nodes with external dependents differently
+  for (const node of tree.nodes) {
+    if (
+      node.dependedOnBy &&
+      node.dependedOnBy.some((depId) => !nodeIds.has(depId))
+    ) {
+      const sanitizedId = node.id.replace(/[^a-zA-Z0-9_]/g, "_");
+      mermaid += `    style ${sanitizedId} fill:#e0f2fe,stroke:#0277bd,stroke-width:3px,stroke-dasharray: 5 5\n`;
+    }
+  }
+
   return mermaid;
 }
 
 interface SidePanelProps {
   node: TechNode;
+  tree: TechTree;
   onClose: () => void;
+  onNodeSelect: (node: TechNode) => void;
 }
 
-function SidePanel({ node, onClose }: SidePanelProps) {
+function SidePanel({ node, tree, onClose, onNodeSelect }: SidePanelProps) {
   return (
     <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -412,15 +434,53 @@ function SidePanel({ node, onClose }: SidePanelProps) {
       <div className="flex-1 p-4 overflow-y-auto">
         <h3 className="text-xl font-bold text-gray-900 mb-3">{node.title}</h3>
         <p className="text-gray-700 leading-relaxed mb-4">{node.description}</p>
+
         {node.dependsOn.length > 0 && (
-          <div>
+          <div className="mb-4">
             <h4 className="font-semibold text-gray-900 mb-2">Dependencies:</h4>
             <ul className="list-disc list-inside space-y-1">
-              {node.dependsOn.map((depId) => (
-                <li key={depId} className="text-gray-600 text-sm">
-                  {depId}
-                </li>
-              ))}
+              {node.dependsOn.map((depId) => {
+                const depNode = tree.nodes.find((n) => n.id === depId);
+                return (
+                  <li key={depId} className="text-gray-600 text-sm">
+                    {depNode ? (
+                      <button
+                        onClick={() => onNodeSelect(depNode)}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {depNode.title}
+                      </button>
+                    ) : (
+                      depId
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {node.dependedOnBy && node.dependedOnBy.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Blocks:</h4>
+            <ul className="list-disc list-inside space-y-1">
+              {node.dependedOnBy.map((depId) => {
+                const depNode = tree.nodes.find((n) => n.id === depId);
+                return (
+                  <li key={depId} className="text-gray-600 text-sm">
+                    {depNode ? (
+                      <button
+                        onClick={() => onNodeSelect(depNode)}
+                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                      >
+                        {depNode.title}
+                      </button>
+                    ) : (
+                      depId
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
@@ -457,6 +517,37 @@ function Graph(props: GraphProps) {
     [props.tree],
   );
 
+  // Function to highlight the selected node
+  const highlightSelectedNode = useCallback(() => {
+    if (!containerRef.current || !selectedNode) return;
+
+    const sanitizedSelectedId = selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_");
+    const nodes = containerRef.current.querySelectorAll('[id^="flowchart-"]');
+
+    nodes.forEach((node: Element) => {
+      if (node instanceof SVGElement) {
+        const nodeId = node.id.replace("flowchart-", "").replace(/-\d+$/, "");
+        const rect = node.querySelector("rect");
+
+        if (rect) {
+          if (nodeId === sanitizedSelectedId) {
+            // Highlight selected node
+            rect.style.fill = "#fef3c7"; // yellow background
+            rect.style.stroke = "#f59e0b"; // orange border
+            rect.style.strokeWidth = "3px";
+            rect.style.filter = "drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))";
+          } else {
+            // Reset other nodes to default
+            rect.style.fill = "";
+            rect.style.stroke = "";
+            rect.style.strokeWidth = "";
+            rect.style.filter = "";
+          }
+        }
+      }
+    });
+  }, [selectedNode]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -468,7 +559,7 @@ function Graph(props: GraphProps) {
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;
 
-          // Add click handlers to all nodes
+          // Add click handlers and hover styles to all nodes
           const nodes =
             containerRef.current.querySelectorAll('[id^="flowchart-"]');
           nodes.forEach((node: Element) => {
@@ -477,9 +568,41 @@ function Graph(props: GraphProps) {
                 .replace("flowchart-", "")
                 .replace(/-\d+$/, "");
               node.style.cursor = "pointer";
+              node.style.transition = "all 0.2s ease";
+
+              // Add hover effects
+              node.addEventListener("mouseenter", () => {
+                const rect = node.querySelector("rect");
+                if (
+                  rect &&
+                  (!selectedNode ||
+                    selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
+                ) {
+                  rect.style.fill = "#dbeafe"; // light blue
+                  rect.style.stroke = "#3b82f6"; // blue border
+                  rect.style.strokeWidth = "2px";
+                }
+              });
+
+              node.addEventListener("mouseleave", () => {
+                const rect = node.querySelector("rect");
+                if (
+                  rect &&
+                  (!selectedNode ||
+                    selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
+                ) {
+                  rect.style.fill = ""; // reset to default
+                  rect.style.stroke = ""; // reset to default
+                  rect.style.strokeWidth = ""; // reset to default
+                }
+              });
+
               node.addEventListener("click", () => handleNodeClick(nodeId));
             }
           });
+
+          // Apply highlighting after rendering
+          highlightSelectedNode();
         }
       } catch (error) {
         console.error("Error rendering Mermaid graph:", error);
@@ -491,7 +614,18 @@ function Graph(props: GraphProps) {
     };
 
     renderGraph();
-  }, [props.tree, graphId, handleNodeClick]);
+  }, [
+    props.tree,
+    graphId,
+    handleNodeClick,
+    selectedNode,
+    highlightSelectedNode,
+  ]);
+
+  // Update highlighting when selected node changes
+  useEffect(() => {
+    highlightSelectedNode();
+  }, [highlightSelectedNode]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -579,7 +713,12 @@ function Graph(props: GraphProps) {
 
       {/* Side Panel */}
       {selectedNode && (
-        <SidePanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+        <SidePanel
+          node={selectedNode}
+          tree={props.tree}
+          onClose={() => setSelectedNode(null)}
+          onNodeSelect={setSelectedNode}
+        />
       )}
     </div>
   );

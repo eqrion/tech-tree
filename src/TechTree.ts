@@ -18,10 +18,15 @@ export interface TechNode {
   // All the other nodes that must be finished to unblock or complete this
   // node.
   dependsOn: TechNodeId[];
+
+  // All the nodes that depend on this node.
+  dependedOnBy: TechNodeId[];
 }
 
 // Validate an object matches the tech tree schema. Throws an error
 // if it does not.
+//
+// This mutates the object in place to compute the 'dependedOnBy' nodes.
 export function validate(tree: object): TechTree {
   if (!tree || typeof tree !== "object") {
     throw new Error("TechTree must be an object");
@@ -69,6 +74,8 @@ export function validate(tree: object): TechTree {
         throw new Error(`Node ${node.id} dependsOn must contain only strings`);
       }
     }
+
+    // We manually compute the dependedOnBy array next
   }
 
   // Second pass: validate dependency references
@@ -76,6 +83,20 @@ export function validate(tree: object): TechTree {
     for (const dep of node.dependsOn) {
       if (!nodeIds.has(dep)) {
         throw new Error(`Node ${node.id} depends on non-existent node: ${dep}`);
+      }
+    }
+  }
+
+  // Final pass: compute the dependedOnBy arrays
+  for (const node of candidate.nodes) {
+    node.dependedOnBy = [];
+  }
+
+  for (const node of candidate.nodes) {
+    for (const dep of node.dependsOn) {
+      const depNode = candidate.nodes.find((n: TechNode) => n.id === dep);
+      if (depNode) {
+        depNode.dependedOnBy.push(node.id);
       }
     }
   }
