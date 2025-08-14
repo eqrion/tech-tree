@@ -315,7 +315,7 @@ function LoadedApp() {
   let [treeIndex, setTreeIndex] = useState<number>(0);
   let tree = treeHistory[treeIndex];
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
-  let [showAddNodeModal, setShowAddNodeModal] = useState(false);
+  let [editing, setEditing] = useState(false);
   let [error, setError] = useState<string | null>(null);
   let [selectedNodeId, setSelectedNodeId] = useState<TechNodeId | null>(null);
   let fileInputRef = useRef<HTMLInputElement>(null);
@@ -499,7 +499,7 @@ function LoadedApp() {
         setError(
           `A node with the ID "${id}" already exists. Please choose a different title.`,
         );
-        return;
+        return null;
       }
 
       const newNode: TechNode = {
@@ -526,10 +526,13 @@ function LoadedApp() {
       } else if (!selectedNodeId) {
         setSelectedNodeId(newNode.id);
       }
+
+      return newNode;
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to add node");
     }
+    return null;
   };
 
   const saveToFile = () => {
@@ -712,10 +715,10 @@ function LoadedApp() {
           </div>
 
           <button
-            onClick={() => setShowAddNodeModal(true)}
+            onClick={() => setEditing(!editing)}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
-            Add
+            {editing ? "View" : "Edit"}
           </button>
 
           <input
@@ -732,7 +735,12 @@ function LoadedApp() {
       <Splitter direction="horizontal" initialSplit={66} className="flex-1">
         <div className="bg-gray-50 w-full h-full">
           {!rootNodeId && (
-            <NodePicker fullTree={tree} onPickNode={setRootNodeId} />
+            <NodePicker
+              editing={editing}
+              nodes={rootNodes(tree)}
+              onPickNode={setRootNodeId}
+              onAddNode={addNode}
+            />
           )}
           {rootNodeId && (
             <Subgraph
@@ -748,79 +756,87 @@ function LoadedApp() {
         {/* Side Panel */}
         {selectedNodeId !== null && (
           <NodeViewer
+            editing={editing}
             nodeId={selectedNodeId}
             fullTree={tree}
             onClose={() => setSelectedNodeId(null)}
             onRootSelect={setRootNodeId}
             onNodeSelect={setSelectedNodeId}
+            onAddNode={addNode}
             onUpdateNode={updateNode}
             onDeleteNode={deleteNode}
           />
         )}
       </Splitter>
-      {showAddNodeModal && (
-        <AddNodeModal
-          onClose={() => setShowAddNodeModal(false)}
-          onAdd={(title, description) => addNode(title, description)}
-        />
-      )}
       {error && <ErrorPopup error={error} onClose={() => setError(null)} />}
     </div>
   );
 }
 
 interface NodePickerProps {
-  fullTree: TechTree;
+  nodes: TechNode[];
+  editing: boolean;
   onPickNode: (id: TechNodeId) => void;
+  onAddNode: (title: string, description: string) => TechNode | null;
 }
 
 function NodePicker(props: NodePickerProps) {
+  let [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  let nodes = props.nodes;
 
-  const roots = useMemo(() => rootNodes(props.fullTree), [props.fullTree]);
-
-  const filteredRoots = useMemo(() => {
-    if (!searchTerm.trim()) return roots;
+  const filteredNodes = useMemo(() => {
+    if (!searchTerm.trim()) return nodes;
     const term = searchTerm.toLowerCase();
-    return roots.filter(
+    return nodes.filter(
       (node) =>
         node.title.toLowerCase().includes(term) ||
         node.description.toLowerCase().includes(term),
     );
-  }, [roots, searchTerm]);
+  }, [nodes, searchTerm]);
 
   return (
     <div className="w-full h-full p-6">
       <div className="max-w-4xl mx-auto">
-        {/* Search Box */}
-        <div className="relative mb-6">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg
-              className="h-5 w-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+        <div className="flex items-center justify-between mb-6">
+          {/* Search Box */}
+          <div className="flex-grow relative mx-6">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
-          />
+          {props.editing && (
+            <button
+              onClick={() => setShowAddNodeModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              Add
+            </button>
+          )}
         </div>
 
         {/* Root Nodes List */}
         <div className="space-y-4">
-          {filteredRoots.length === 0 ? (
+          {filteredNodes.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-gray-500 text-lg">
                 {searchTerm
@@ -829,7 +845,7 @@ function NodePicker(props: NodePickerProps) {
               </p>
             </div>
           ) : (
-            filteredRoots.map((node) => (
+            filteredNodes.map((node) => (
               <div
                 key={node.id}
                 onClick={() => props.onPickNode(node.id)}
@@ -846,31 +862,51 @@ function NodePicker(props: NodePickerProps) {
           )}
         </div>
       </div>
+      {showAddNodeModal && (
+        <AddNodeModal
+          onClose={() => setShowAddNodeModal(false)}
+          onAdd={props.onAddNode}
+        />
+      )}
     </div>
   );
 }
 
 interface NodePickerModalProps {
-  fullTree: TechTree;
+  nodes: TechNode[];
+  editing: boolean;
   onPickNode: (id: TechNodeId) => void;
+  onAddNode: (title: string, description: string) => TechNode | null;
   onClose: () => void;
 }
 
 function NodePickerModal({
-  fullTree,
+  nodes,
+  editing,
   onPickNode,
+  onAddNode,
   onClose,
 }: NodePickerModalProps) {
   const handlePickNode = (id: TechNodeId) => {
     onPickNode(id);
     onClose();
   };
+  const handleAddNode = (title: string, description: string) => {
+    var result = onAddNode(title, description);
+    onClose();
+    return result;
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-[80vh] max-h-[80vh]">
       <div className="p-6">
         <div className="overflow-y-auto">
-          <NodePicker fullTree={fullTree} onPickNode={handlePickNode} />
+          <NodePicker
+            editing={editing}
+            nodes={nodes}
+            onAddNode={handleAddNode}
+            onPickNode={handlePickNode}
+          />
         </div>
       </div>
     </Modal>
@@ -879,25 +915,28 @@ function NodePickerModal({
 
 interface NodeViewerProps {
   nodeId: TechNodeId;
+  editing: boolean;
   fullTree: TechTree;
   onClose: () => void;
   onRootSelect: (nodeId: TechNodeId) => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
+  onAddNode: (title: string, description: string) => TechNode | null;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
   onDeleteNode: (id: TechNodeId) => void;
 }
 
 function NodeViewer({
   nodeId,
+  editing,
   fullTree,
   onClose,
   onRootSelect,
   onNodeSelect,
+  onAddNode,
   onUpdateNode,
   onDeleteNode,
 }: NodeViewerProps) {
   const node = fullTree.nodes.find((n) => n.id === nodeId) as TechNode;
-  const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(node.title);
   const [editedDescription, setEditedDescription] = useState(node.description);
   const [showNodePicker, setShowNodePicker] = useState(false);
@@ -939,7 +978,7 @@ function NodeViewer({
   // Handle title changes
   const handleTitleChange = (newTitle: string) => {
     setEditedTitle(newTitle);
-    if (isEditing && newTitle.trim()) {
+    if (editing && newTitle.trim()) {
       debouncedUpdate(newTitle.trim(), editedDescription);
     }
   };
@@ -947,7 +986,7 @@ function NodeViewer({
   // Handle description changes
   const handleDescriptionChange = (newDescription: string) => {
     setEditedDescription(newDescription);
-    if (isEditing) {
+    if (editing) {
       debouncedUpdate(editedTitle, newDescription);
     }
   };
@@ -961,8 +1000,8 @@ function NodeViewer({
     };
   }, []);
 
-  const handleToggleEdit = () => {
-    if (isEditing) {
+  useEffect(() => {
+    if (!editing) {
       // Save any pending changes when exiting edit mode
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
@@ -981,8 +1020,7 @@ function NodeViewer({
         onUpdateNode(node.id, updatedNode);
       }
     }
-    setIsEditing(!isEditing);
-  };
+  }, [editing]);
 
   const handleAddDependency = (dependencyId: TechNodeId) => {
     const updatedNode = {
@@ -1038,7 +1076,7 @@ function NodeViewer({
   return (
     <div className="w-full h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        {isEditing ? (
+        {editing ? (
           <input
             type="text"
             value={editedTitle}
@@ -1057,34 +1095,14 @@ function NodeViewer({
           >
             Focus
           </button>
-          <button
-            onClick={handleDelete}
-            className="p-1 hover:bg-gray-100 rounded"
-            title="Delete node"
-          >
-            <svg
-              className="w-5 h-5 text-red-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {editing && (
+            <button
+              onClick={handleDelete}
+              className="p-1 hover:bg-gray-100 rounded"
+              title="Delete node"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
-
-          <button
-            onClick={handleToggleEdit}
-            className="p-1 hover:bg-gray-100 rounded"
-            title={isEditing ? "Save changes" : "Edit node"}
-          >
-            {isEditing ? (
               <svg
-                className="w-5 h-5 text-green-600"
+                className="w-5 h-5 text-red-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1093,25 +1111,11 @@ function NodeViewer({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M5 13l4 4L19 7"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                 />
               </svg>
-            ) : (
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            )}
-          </button>
+            </button>
+          )}
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded"
@@ -1134,14 +1138,14 @@ function NodeViewer({
         </div>
       </div>
       <div className="flex-1 p-4 overflow-y-auto">
-        {isEditing && (
+        {editing && (
           <div className="mb-4 p-3 bg-blue-50 text-xs text-blue-600 rounded-md">
             Changes are saved automatically as you type.
           </div>
         )}
 
         <div className="mb-12">
-          {isEditing ? (
+          {editing ? (
             <textarea
               value={editedDescription}
               onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -1181,7 +1185,7 @@ function NodeViewer({
                         </span>
                       )}
                     </div>
-                    {isEditing && (
+                    {editing && (
                       <button
                         onClick={() => handleRemoveDependency(depId)}
                         className="ml-2 text-red-500 hover:text-red-700"
@@ -1210,7 +1214,7 @@ function NodeViewer({
             <p className="text-gray-500 text-sm">No dependencies</p>
           )}
 
-          {isEditing && (
+          {editing && (
             <button
               onClick={() => setShowNodePicker(true)}
               className="mt-8 w-full px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
@@ -1253,8 +1257,10 @@ function NodeViewer({
 
       {showNodePicker && (
         <NodePickerModal
-          fullTree={{ nodes: availableNodes }}
+          nodes={availableNodes}
+          editing={editing}
           onPickNode={handleAddDependency}
+          onAddNode={onAddNode}
           onClose={() => setShowNodePicker(false)}
         />
       )}
@@ -1579,6 +1585,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
             id="node-title"
             type="text"
             value={title}
+            autoFocus={true}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter title..."
