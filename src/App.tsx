@@ -266,157 +266,7 @@ export function App() {
 }
 
 let initialTreeRaw = {
-  nodes: [
-    // Root 1: Quantum Flux Capacitor Systems
-    {
-      id: "quantum-flux-capacitor",
-      title: "Quantum Flux Capacitor",
-      description:
-        "Primary temporal displacement mechanism utilizing quantum entanglement principles for chronodynamic stabilization",
-      dependsOn: [],
-    },
-    {
-      id: "temporal-phase-discriminator",
-      title: "Temporal Phase Discriminator",
-      description:
-        "Advanced chronometric filtering system that isolates temporal anomalies through phase-locked loop mechanisms",
-      dependsOn: ["quantum-flux-capacitor"],
-    },
-    {
-      id: "chronodynamic-stabilizer",
-      title: "Chronodynamic Stabilizer",
-      description:
-        "Maintains temporal coherence by modulating quantum decoherence rates via parametric amplification",
-      dependsOn: [
-        "temporal-phase-discriminator",
-        "quantum-entanglement-matrix",
-      ],
-    },
-    {
-      id: "temporal-feedback-suppressor",
-      title: "Temporal Feedback Suppressor",
-      description:
-        "Prevents causality loop formation through predictive temporal echo cancellation algorithms",
-      dependsOn: ["chronodynamic-stabilizer"],
-    },
-    {
-      id: "quantum-resonance-chamber",
-      title: "Quantum Resonance Chamber",
-      description:
-        "Amplifies quantum field oscillations using standing wave interference patterns in hyperdimensional space",
-      dependsOn: ["quantum-flux-capacitor"],
-    },
-    {
-      id: "temporal-displacement-array",
-      title: "Temporal Displacement Array",
-      description:
-        "Multi-dimensional projection system enabling controlled temporal trajectory modifications",
-      dependsOn: ["temporal-feedback-suppressor", "quantum-resonance-chamber"],
-    },
-
-    // Root 2: Turbo Encabulator Matrix
-    {
-      id: "turbo-encabulator",
-      title: "Turbo Encabulator",
-      description:
-        "The original automated cardinal grammeters for effectively preventing side fumbling in mechanical systems",
-      dependsOn: [],
-    },
-    {
-      id: "panendermic-semiboloid",
-      title: "Panendermic Semiboloid",
-      description:
-        "Essential slots for the winding of the rotor, configured in a panendermic arrangement for optimal sinusoidal depleneration",
-      dependsOn: ["turbo-encabulator"],
-    },
-    {
-      id: "ambifacient-lunar-waneshaft",
-      title: "Ambifacient Lunar Waneshaft",
-      description:
-        "Couples directly to the differential girdlespring on the up-end of the grammeters for maximum torque transmission",
-      dependsOn: ["panendermic-semiboloid", "quantum-entanglement-matrix"],
-    },
-    {
-      id: "malleable-logarithmic-casing",
-      title: "Malleable Logarithmic Casing",
-      description:
-        "Houses the cardinal grammeters in a logarithmic spiral configuration to prevent exponential decay of the flux coefficients",
-      dependsOn: ["turbo-encabulator"],
-    },
-    {
-      id: "spurving-bearings",
-      title: "Spurving Bearings",
-      description:
-        "Specialized bearing assemblies that maintain proper alignment of the panendermic semiboloid slots during high-speed operation",
-      dependsOn: [
-        "ambifacient-lunar-waneshaft",
-        "malleable-logarithmic-casing",
-      ],
-    },
-    {
-      id: "differential-girdlespring",
-      title: "Differential Girdlespring",
-      description:
-        "Provides reactive torque compensation and prevents side fumbling through advanced spring-loaded differential mechanisms",
-      dependsOn: ["spurving-bearings"],
-    },
-
-    // Root 3: Hyperbolic Metamagnetic Engine
-    {
-      id: "hyperbolic-metamagnetic-engine",
-      title: "Hyperbolic Metamagnetic Engine",
-      description:
-        "Revolutionary propulsion system utilizing metamagnetic field inversion for hyperbolic trajectory optimization",
-      dependsOn: [],
-    },
-    {
-      id: "metamagnetic-field-inverter",
-      title: "Metamagnetic Field Inverter",
-      description:
-        "Reverses polarity of metamagnetic domains through controlled ferromagnetic hysteresis manipulation",
-      dependsOn: ["hyperbolic-metamagnetic-engine"],
-    },
-    {
-      id: "hyperbolic-trajectory-calculator",
-      title: "Hyperbolic Trajectory Calculator",
-      description:
-        "Computes optimal flight paths using non-Euclidean geometry and metamagnetic field strength calculations",
-      dependsOn: ["metamagnetic-field-inverter", "quantum-entanglement-matrix"],
-    },
-    {
-      id: "ferromagnetic-oscillation-dampener",
-      title: "Ferromagnetic Oscillation Dampener",
-      description:
-        "Suppresses unwanted magnetic harmonics through parametric feedback control of ferromagnetic domains",
-      dependsOn: ["hyperbolic-metamagnetic-engine"],
-    },
-    {
-      id: "metamagnetic-flux-regulator",
-      title: "Metamagnetic Flux Regulator",
-      description:
-        "Maintains constant metamagnetic field density through adaptive flux compensation algorithms",
-      dependsOn: [
-        "ferromagnetic-oscillation-dampener",
-        "hyperbolic-trajectory-calculator",
-      ],
-    },
-    {
-      id: "hyperbolic-propulsion-array",
-      title: "Hyperbolic Propulsion Array",
-      description:
-        "Multi-vector thrust generation system utilizing synchronized metamagnetic field manipulation for omnidirectional acceleration",
-      dependsOn: ["metamagnetic-flux-regulator"],
-    },
-
-    // Shared dependency node
-    {
-      id: "quantum-entanglement-matrix",
-      title: "Quantum Entanglement Matrix",
-      description:
-        "Fundamental quantum substrate enabling instantaneous information transfer across space-time via entangled particle pairs",
-      dependsOn: [],
-    },
-  ],
+  nodes: [],
 };
 let initialTree = validate(initialTreeRaw);
 let initialTreeHistory = [initialTree];
@@ -454,33 +304,32 @@ function LoadedApp() {
   let fileInputRef = useRef<HTMLInputElement>(null);
   let [isLoadingUrl, setIsLoadingUrl] = useState(false);
 
-  // Check for URL parameter on mount
+  // Load the default tree
   useEffect(() => {
-    const urlParam = getUrlParameter("url");
-    if (urlParam) {
-      setIsLoadingUrl(true);
-      fetchTreeFromUrl(urlParam)
-        .then((validatedTree) => {
-          // Successfully loaded and validated - add to history
-          setTreeHistory([validatedTree]);
-          setTreeIndex(0);
+    const urlParam = getUrlParameter("url") || "./trees/default.json";
 
-          // Reset UI state
-          setRootNodeId(null);
-          setSelectedNodeId(null);
-          setError(null);
-        })
-        .catch((err) => {
-          console.error("Error loading from URL:", err);
-          setError(
-            err instanceof Error ? err.message : "Failed to load from URL",
-          );
-        })
-        .finally(() => {
-          setIsLoadingUrl(false);
-        });
-    }
-  }, []); // Empty dependency array - only run on mount
+    setIsLoadingUrl(true);
+    fetchTreeFromUrl(urlParam)
+      .then((validatedTree) => {
+        // Successfully loaded and validated - add to history
+        setTreeHistory([validatedTree]);
+        setTreeIndex(0);
+
+        // Reset UI state
+        setRootNodeId(null);
+        setSelectedNodeId(null);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error("Error loading from URL:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load from URL",
+        );
+      })
+      .finally(() => {
+        setIsLoadingUrl(false);
+      });
+  }, []);
 
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
@@ -725,7 +574,14 @@ function LoadedApp() {
       <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src="./favicon.svg" alt="Tech Tree" className="w-6 h-6" />
-          <h1 className="text-xl font-semibold">Tech Tree</h1>
+          <a
+            href="https://github.com/eqrion/tech-tree"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xl font-semibold text-gray-900 hover:text-blue-900 transition-colors hover:underline"
+          >
+            Tech Tree
+          </a>
           {isLoadingUrl && (
             <div className="ml-4 flex items-center gap-2 text-sm text-blue-600">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
