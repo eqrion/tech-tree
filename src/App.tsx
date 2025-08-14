@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import {
   type TechTree,
@@ -33,6 +34,64 @@ function Markdown(props: { text: string }) {
     />
   );
 }
+
+interface ModalProps {
+  onClose?: () => void;
+  children: React.ReactNode;
+  allowDismiss?: boolean;
+  className?: string;
+}
+
+const Modal: React.FC<ModalProps> = ({
+  onClose,
+  children,
+  allowDismiss = true,
+  className = "",
+}) => {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && allowDismiss && onClose) {
+        onClose();
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (allowDismiss && onClose && overlayRef.current === e.target) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [allowDismiss, onClose]);
+
+  const modalContent = (
+    <div
+      ref={overlayRef}
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${
+        allowDismiss ? "bg-black/50" : "bg-black/70 backdrop-blur-sm"
+      }`}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={`bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-auto ${className}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+};
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -248,6 +307,8 @@ let initialTree = validate(initialTreeRaw);
 function AppInner() {
   let [tree, setTree] = useState<TechTree>(initialTree);
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
+  const [showAddNodeModal, setShowAddNodeModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
@@ -269,38 +330,105 @@ function AppInner() {
 
   const updateNode = (previousId: TechNodeId, newNode: TechNode) => {
     let newTree = clone(tree);
-    updateRefsToId(newTree, previousId, newNode.id);
     let newIndex = newTree.nodes.findIndex((v) => v.id === newNode.id);
     if (newIndex === -1) {
       newTree.nodes.push(newNode);
     } else {
       newTree.nodes[newIndex] = newNode;
     }
-    newTree = validate(newTree);
+    updateRefsToId(newTree, previousId, newNode.id);
+    try {
+      newTree = validate(newTree);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to update node");
+      return;
+    }
+    setTree(newTree);
   };
 
-  if (!rootNodeId) {
-    return <RootNodePicker fullTree={tree} onPickRoot={setRootNodeId} />;
-  }
+  const addNode = (
+    title: string,
+    description: string,
+    blocking: TechNodeId | null,
+  ) => {
+    try {
+      let newTree = clone(tree);
+      const id = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      // Check if node with this ID already exists
+      if (newTree.nodes.find((node) => node.id === id)) {
+        setError(
+          `A node with the ID "${id}" already exists. Please choose a different title.`,
+        );
+        return;
+      }
+
+      const newNode: TechNode = {
+        id,
+        title,
+        description,
+        dependsOn: [],
+        dependedOnBy: [],
+      };
+      newTree.nodes.push(newNode);
+      if (blocking !== null) {
+        newTree.nodes.find((x) => x.id === blocking)?.dependsOn.push(id);
+        newNode.dependedOnBy.push(blocking);
+      }
+      newTree = validate(newTree);
+      setTree(newTree);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Failed to add node");
+    }
+  };
 
   return (
     <div className="w-full h-full flex flex-col">
       <div className="bg-white shadow-sm border-b p-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Technology Tree</h1>
-        <button
-          onClick={() => setRootNodeId(null)}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
-        >
-          Back to Tree Selection
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddNodeModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Add Node
+          </button>
+          {rootNodeId && (
+            <button
+              onClick={() => setRootNodeId(null)}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            >
+              Back to Tree Selection
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1">
-        <Subgraph
-          onUpdateNode={updateNode}
-          fullTree={tree}
-          subTree={subtree as TechTree}
-        />
+        {!rootNodeId && (
+          <RootNodePicker fullTree={tree} onPickRoot={setRootNodeId} />
+        )}
+        {rootNodeId && (
+          <Subgraph
+            onUpdateNode={updateNode}
+            fullTree={tree}
+            subTree={subtree as TechTree}
+          />
+        )}
       </div>
+      {showAddNodeModal && (
+        <AddNodeModal
+          onClose={() => setShowAddNodeModal(false)}
+          onAdd={(title, description) =>
+            addNode(title, description, rootNodeId)
+          }
+        />
+      )}
+      {error && <ErrorPopup error={error} onClose={() => setError(null)} />}
     </div>
   );
 }
@@ -328,10 +456,6 @@ function RootNodePicker(props: RootNodePickerProps) {
   return (
     <div className="w-full h-full bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">
-          Choose a Technology Tree
-        </h1>
-
         {/* Search Box */}
         <div className="relative mb-6">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -760,6 +884,114 @@ function Subgraph(props: SubgraphProps) {
         />
       )}
     </div>
+  );
+}
+
+interface AddNodeModalProps {
+  onClose: () => void;
+  onAdd: (title: string, description: string) => void;
+}
+
+function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (title.trim() && description.trim()) {
+      onAdd(title.trim(), description.trim());
+      onClose();
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} className="max-w-2xl">
+      <form onSubmit={handleSubmit} className="p-6">
+        <h2 className="text-xl font-semibold mb-4">Add New Node</h2>
+
+        <div className="mb-4">
+          <label
+            htmlFor="node-title"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
+            Title
+          </label>
+          <input
+            id="node-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter node title..."
+            required
+          />
+        </div>
+
+        <div className="mb-6">
+          <label
+            htmlFor="node-description"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
+            Description
+          </label>
+          <textarea
+            id="node-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={6}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+            placeholder="Enter node description..."
+            required
+          />
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!title.trim() || !description.trim()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            Add Node
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+interface ErrorPopupProps {
+  error: string;
+  onClose: () => void;
+}
+
+function ErrorPopup({ error, onClose }: ErrorPopupProps) {
+  return (
+    <Modal onClose={onClose} className="max-w-md">
+      <div className="p-6">
+        <div className="flex items-center mb-4">
+          <div className="text-red-500 text-2xl mr-3">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-900">Error</h2>
+        </div>
+
+        <p className="text-gray-700 mb-6 leading-relaxed">{error}</p>
+
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
