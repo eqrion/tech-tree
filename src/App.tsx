@@ -142,7 +142,7 @@ export function App() {
     <div className="w-screen h-screen">
       <ErrorBoundary>
         <React.Suspense fallback={<LoadingSpinner />}>
-          <AppInner />
+          <LoadedApp />
         </React.Suspense>
       </ErrorBoundary>
     </div>
@@ -304,11 +304,12 @@ let initialTreeRaw = {
 };
 let initialTree = validate(initialTreeRaw);
 
-function AppInner() {
+function LoadedApp() {
   let [tree, setTree] = useState<TechTree>(initialTree);
   let [rootNodeId, setRootNodeId] = useState<TechNodeId | null>(null);
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<TechNodeId | null>(null);
 
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
@@ -316,6 +317,15 @@ function AppInner() {
     }
     return subgraph(tree, rootNodeId);
   }, [tree, rootNodeId]);
+
+  useEffect(() => {
+    if (!selectedNodeId || !subtree) {
+      return;
+    }
+    if (!subtree.nodes.find((x) => x.id === selectedNodeId)) {
+      setSelectedNodeId(null);
+    }
+  }, [selectedNodeId, subtree]);
 
   useEffect(() => {
     mermaid.initialize({
@@ -347,11 +357,14 @@ function AppInner() {
     setTree(newTree);
   };
 
-  const addNode = (
-    title: string,
-    description: string,
-    blocking: TechNodeId | null,
-  ) => {
+  const addNode = (title: string, description: string) => {
+    let blocking: null | TechNodeId = null;
+    if (selectedNodeId) {
+      blocking = selectedNodeId;
+    } else if (rootNodeId) {
+      blocking = rootNodeId;
+    }
+
     try {
       let newTree = clone(tree);
       const id = title
@@ -400,7 +413,10 @@ function AppInner() {
           </button>
           {rootNodeId && (
             <button
-              onClick={() => setRootNodeId(null)}
+              onClick={() => {
+                setRootNodeId(null);
+                setSelectedNodeId(null);
+              }}
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
             >
               Back to Tree Selection
@@ -417,15 +433,15 @@ function AppInner() {
             onUpdateNode={updateNode}
             fullTree={tree}
             subTree={subtree as TechTree}
+            selectedNodeId={selectedNodeId}
+            onNodeSelect={setSelectedNodeId}
           />
         )}
       </div>
       {showAddNodeModal && (
         <AddNodeModal
           onClose={() => setShowAddNodeModal(false)}
-          onAdd={(title, description) =>
-            addNode(title, description, rootNodeId)
-          }
+          onAdd={(title, description) => addNode(title, description)}
         />
       )}
       {error && <ErrorPopup error={error} onClose={() => setError(null)} />}
@@ -514,44 +530,240 @@ function RootNodePicker(props: RootNodePickerProps) {
   );
 }
 
-interface SidePanelProps {
-  node: TechNode;
+interface NodeViewerProps {
+  nodeId: TechNodeId;
   subTree: TechTree;
   fullTree: TechTree;
   onClose: () => void;
-  onNodeSelect: (node: TechNode) => void;
+  onNodeSelect: (nodeId: TechNodeId) => void;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
 }
 
-function SidePanel({ node, subTree, onClose, onNodeSelect }: SidePanelProps) {
+function NodeViewer({
+  nodeId,
+  subTree,
+  onClose,
+  onNodeSelect,
+  onUpdateNode,
+}: NodeViewerProps) {
+  const node = subTree.nodes.find((n) => n.id === nodeId);
+
+  if (!node) {
+    return (
+      <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Node not found
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded"
+            title="Close"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(node.title);
+  const [editedDescription, setEditedDescription] = useState(node.description);
+  const updateTimeoutRef = useRef<number | null>(null);
+
+  // Reset edited values when node changes
+  useEffect(() => {
+    setEditedTitle(node.title);
+    setEditedDescription(node.description);
+  }, [node]);
+
+  // Debounced update function
+  const debouncedUpdate = useCallback(
+    (title: string, description: string) => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+
+      updateTimeoutRef.current = setTimeout(() => {
+        // Generate new ID from title
+        const newId = title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        const updatedNode = {
+          ...node,
+          id: newId,
+          title: title,
+          description: description,
+        };
+
+        onUpdateNode(node.id, updatedNode);
+      }, 500); // 500ms debounce
+    },
+    [node, onUpdateNode],
+  );
+
+  // Handle title changes
+  const handleTitleChange = (newTitle: string) => {
+    setEditedTitle(newTitle);
+    if (isEditing && newTitle.trim()) {
+      debouncedUpdate(newTitle.trim(), editedDescription);
+    }
+  };
+
+  // Handle description changes
+  const handleDescriptionChange = (newDescription: string) => {
+    setEditedDescription(newDescription);
+    if (isEditing) {
+      debouncedUpdate(editedTitle, newDescription);
+    }
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleToggleEdit = () => {
+    if (isEditing) {
+      // Save any pending changes when exiting edit mode
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        const newId = editedTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        const updatedNode = {
+          ...node,
+          id: newId,
+          title: editedTitle,
+          description: editedDescription,
+        };
+
+        onUpdateNode(node.id, updatedNode);
+      }
+    }
+    setIsEditing(!isEditing);
+  };
+
   return (
     <div className="absolute top-0 right-0 w-80 h-full bg-white shadow-lg border-l border-gray-200 z-20 flex flex-col">
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">{node.title}</h2>
-        <button
-          onClick={onClose}
-          className="p-1 hover:bg-gray-100 rounded"
-          title="Close"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {isEditing ? (
+          <input
+            type="text"
+            value={editedTitle}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            className="flex-1 text-lg font-semibold text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none mr-2"
+            placeholder="Node title..."
+          />
+        ) : (
+          <h2 className="text-lg font-semibold text-gray-900">{node.title}</h2>
+        )}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleToggleEdit}
+            className="p-1 hover:bg-gray-100 rounded"
+            title={isEditing ? "Save changes" : "Edit node"}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+            {isEditing ? (
+              <svg
+                className="w-5 h-5 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded"
+            title="Close"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="mb-4">
-          <Markdown text={node.description} />
+          {isEditing ? (
+            <textarea
+              value={editedDescription}
+              onChange={(e) => handleDescriptionChange(e.target.value)}
+              className="w-full h-32 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+              placeholder="Node description (markdown supported)..."
+            />
+          ) : (
+            <Markdown text={node.description} />
+          )}
         </div>
+
+        {isEditing && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-md">
+            <p className="text-sm text-blue-700">
+              <strong>Preview ID:</strong>{" "}
+              {editedTitle
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, "") || "(empty)"}
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Changes are saved automatically as you type.
+            </p>
+          </div>
+        )}
 
         {node.dependsOn.length > 0 && (
           <div className="mb-4">
@@ -563,7 +775,7 @@ function SidePanel({ node, subTree, onClose, onNodeSelect }: SidePanelProps) {
                   <li key={depId} className="text-gray-600 text-sm">
                     {depNode ? (
                       <button
-                        onClick={() => onNodeSelect(depNode)}
+                        onClick={() => onNodeSelect(depNode.id)}
                         className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                       >
                         {depNode.title}
@@ -588,7 +800,7 @@ function SidePanel({ node, subTree, onClose, onNodeSelect }: SidePanelProps) {
                   <li key={depId} className="text-gray-600 text-sm">
                     {depNode ? (
                       <button
-                        onClick={() => onNodeSelect(depNode)}
+                        onClick={() => onNodeSelect(depNode.id)}
                         className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                       >
                         {depNode.title}
@@ -648,6 +860,8 @@ interface SubgraphProps {
   subTree: TechTree;
   fullTree: TechTree;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
+  selectedNodeId: TechNodeId | null;
+  onNodeSelect: (nodeId: TechNodeId | null) => void;
 }
 
 function Subgraph(props: SubgraphProps) {
@@ -659,7 +873,6 @@ function Subgraph(props: SubgraphProps) {
   const [graphId] = useState(
     () => `graph-${Math.random().toString(36).substr(2, 9)}`,
   );
-  const [selectedNode, setSelectedNode] = useState<TechNode | null>(null);
 
   const handleNodeClick = useCallback(
     (nodeId: string) => {
@@ -672,15 +885,20 @@ function Subgraph(props: SubgraphProps) {
       );
       console.log(`click ${originalNodeId}`);
       if (node) {
-        setSelectedNode(node);
+        props.onNodeSelect(node.id);
       }
     },
-    [props.subTree],
+    [props.subTree, props.onNodeSelect],
   );
 
   // Function to highlight the selected node
   const highlightSelectedNode = useCallback(() => {
-    if (!containerRef.current || !selectedNode) return;
+    if (!containerRef.current || !props.selectedNodeId) return;
+
+    const selectedNode = props.subTree.nodes.find(
+      (n) => n.id === props.selectedNodeId,
+    );
+    if (!selectedNode) return;
 
     const sanitizedSelectedId = selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_");
     const nodes = containerRef.current.querySelectorAll('[id^="flowchart-"]');
@@ -707,7 +925,7 @@ function Subgraph(props: SubgraphProps) {
         }
       }
     });
-  }, [selectedNode]);
+  }, [props.selectedNodeId, props.subTree]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -736,8 +954,13 @@ function Subgraph(props: SubgraphProps) {
                 const rect = node.querySelector("rect");
                 if (
                   rect &&
-                  (!selectedNode ||
-                    selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
+                  (!props.selectedNodeId ||
+                    !props.subTree.nodes
+                      .find((n) => n.id === props.selectedNodeId)
+                      ?.id.replace(/[^a-zA-Z0-9_]/g, "_") ||
+                    props.subTree.nodes
+                      .find((n) => n.id === props.selectedNodeId)
+                      ?.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
                 ) {
                   rect.style.fill = "#dbeafe"; // light blue
                   rect.style.stroke = "#3b82f6"; // blue border
@@ -749,8 +972,13 @@ function Subgraph(props: SubgraphProps) {
                 const rect = node.querySelector("rect");
                 if (
                   rect &&
-                  (!selectedNode ||
-                    selectedNode.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
+                  (!props.selectedNodeId ||
+                    !props.subTree.nodes
+                      .find((n) => n.id === props.selectedNodeId)
+                      ?.id.replace(/[^a-zA-Z0-9_]/g, "_") ||
+                    props.subTree.nodes
+                      .find((n) => n.id === props.selectedNodeId)
+                      ?.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
                 ) {
                   rect.style.fill = ""; // reset to default
                   rect.style.stroke = ""; // reset to default
@@ -779,7 +1007,7 @@ function Subgraph(props: SubgraphProps) {
     props.subTree,
     graphId,
     handleNodeClick,
-    selectedNode,
+    props.selectedNodeId,
     highlightSelectedNode,
   ]);
 
@@ -854,7 +1082,7 @@ function Subgraph(props: SubgraphProps) {
 
       {/* Graph Container */}
       <div
-        className={`w-full h-full cursor-grab active:cursor-grabbing ${selectedNode ? "pr-80" : ""}`}
+        className={`w-full h-full cursor-grab active:cursor-grabbing ${props.selectedNodeId ? "pr-80" : ""}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -873,13 +1101,13 @@ function Subgraph(props: SubgraphProps) {
       </div>
 
       {/* Side Panel */}
-      {selectedNode && (
-        <SidePanel
-          node={selectedNode}
+      {props.selectedNodeId && (
+        <NodeViewer
+          nodeId={props.selectedNodeId}
           fullTree={props.fullTree}
           subTree={props.subTree}
-          onClose={() => setSelectedNode(null)}
-          onNodeSelect={setSelectedNode}
+          onClose={() => props.onNodeSelect(null)}
+          onNodeSelect={props.onNodeSelect}
           onUpdateNode={props.onUpdateNode}
         />
       )}
@@ -940,7 +1168,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
             onChange={(e) => setDescription(e.target.value)}
             rows={6}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
-            placeholder="Enter node description..."
+            placeholder="Enter node description (markdown supported)..."
             required
           />
         </div>
@@ -995,5 +1223,4 @@ function ErrorPopup({ error, onClose }: ErrorPopupProps) {
   );
 }
 
-createRoot(document.getElementById("root") as Element).render(<App />);
 createRoot(document.getElementById("root") as Element).render(<App />);
