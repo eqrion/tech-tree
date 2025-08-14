@@ -613,6 +613,7 @@ function LoadedApp() {
     setTreeIndex(0);
     setSelectedNodeId(null);
     setRootNodeId(null);
+    setEditing(true);
     // Clear URL parameters when creating new tree
     updateUrlParameters({ root: null, selected: null });
   };
@@ -940,6 +941,7 @@ function NodeViewer({
   const [editedTitle, setEditedTitle] = useState(node.title);
   const [editedDescription, setEditedDescription] = useState(node.description);
   const [showNodePicker, setShowNodePicker] = useState(false);
+  const [showAddNodeModal, setShowAddNodeModal] = useState(false);
   const updateTimeoutRef = useRef<number | null>(null);
 
   // Reset edited values when node changes
@@ -1216,13 +1218,16 @@ function NodeViewer({
 
           {editing && (
             <button
-              onClick={() => setShowNodePicker(true)}
+              onClick={() => {
+                if (availableNodes.length === 0) {
+                  setShowAddNodeModal(true);
+                } else {
+                  setShowNodePicker(true);
+                }
+              }}
               className="mt-8 w-full px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-              disabled={availableNodes.length === 0}
             >
-              {availableNodes.length === 0
-                ? "No nodes available"
-                : "Add Dependency"}
+              {"Add Dependency"}
             </button>
           )}
         </div>
@@ -1255,6 +1260,12 @@ function NodeViewer({
         )}
       </div>
 
+      {showAddNodeModal && (
+        <AddNodeModal
+          onClose={() => setShowAddNodeModal(false)}
+          onAdd={onAddNode}
+        />
+      )}
       {showNodePicker && (
         <NodePickerModal
           nodes={availableNodes}
@@ -1586,6 +1597,7 @@ function AddNodeModal({ onClose, onAdd }: AddNodeModalProps) {
             type="text"
             value={title}
             autoFocus={true}
+            autoComplete="off"
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter title..."
