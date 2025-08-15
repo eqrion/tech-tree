@@ -1,6 +1,11 @@
 import * as React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { type TechTree, type TechNode, type TechNodeId, generateId } from "./TechTree.js";
+import {
+  type TechTree,
+  type TechNode,
+  type TechNodeId,
+  generateId,
+} from "./TechTree.js";
 import { Modal } from "./Modal.js";
 import { Markdown } from "./Markdown.js";
 import { NodePickerModal } from "./NodePicker.js";
@@ -75,7 +80,12 @@ interface NodeViewerProps {
   onRootSelect: (nodeId: TechNodeId) => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
   onAddNewDependsOn: () => void;
-  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
+  onUpdateNode: (
+    previousId: TechNodeId,
+    newNode: TechNode,
+    updateKind: string,
+    allowMerge: boolean,
+  ) => void;
   onDeleteNode: (id: TechNodeId) => void;
 }
 
@@ -91,95 +101,31 @@ export function NodeViewer({
   onDeleteNode,
 }: NodeViewerProps) {
   const node = fullTree.nodes.find((n) => n.id === nodeId) as TechNode;
-  const [editedTitle, setEditedTitle] = useState(node.title);
-  const [editedDescription, setEditedDescription] = useState(node.description);
   const [showNodePicker, setShowNodePicker] = useState(false);
-  const [showAddNodeModal, setShowAddNodeModal] = useState(false);
-  const updateTimeoutRef = useRef<number | null>(null);
 
-  // Reset edited values when node changes
-  useEffect(() => {
-    setEditedTitle(node.title);
-    setEditedDescription(node.description);
-  }, [node]);
-
-  // Debounced update function
-  const debouncedUpdate = useCallback(
-    (title: string, description: string) => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
-
-      updateTimeoutRef.current = setTimeout(() => {
-        // Generate new ID from title
-        const newId = generateId(title);
-
-        const updatedNode = {
-          ...node,
-          id: newId,
-          title: title,
-          description: description,
-        };
-
-        onUpdateNode(node.id, updatedNode);
-      }, 2000);
-    },
-    [node, onUpdateNode],
-  );
-
-  // Handle title changes
-  const handleTitleChange = (newTitle: string) => {
-    setEditedTitle(newTitle);
-    if (editing && newTitle.trim()) {
-      debouncedUpdate(newTitle.trim(), editedDescription);
-    }
-  };
-
-  // Handle description changes
-  const handleDescriptionChange = (newDescription: string) => {
-    setEditedDescription(newDescription);
-    if (editing) {
-      debouncedUpdate(editedTitle, newDescription);
-    }
-  };
-
-  // Clean up timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
+  const handleSetTitle = (title: string) => {
+    const updatedNode = {
+      ...node,
+      id: generateId(title),
+      title: title,
     };
-  }, []);
+    onUpdateNode(node.id, updatedNode, "set-title", true);
+  };
 
-  useEffect(() => {
-    if (!editing) {
-      // Save any pending changes when exiting edit mode
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-        const newId = editedTitle
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-
-        const updatedNode = {
-          ...node,
-          id: newId,
-          title: editedTitle,
-          description: editedDescription,
-        };
-
-        onUpdateNode(node.id, updatedNode);
-      }
-    }
-  }, [editing]);
+  const handleSetDescription = (description: string) => {
+    const updatedNode = {
+      ...node,
+      description: description,
+    };
+    onUpdateNode(node.id, updatedNode, "set-description", true);
+  };
 
   const handleAddDependency = (dependencyId: TechNodeId) => {
     const updatedNode = {
       ...node,
       dependsOn: [...node.dependsOn, dependencyId],
     };
-    onUpdateNode(node.id, updatedNode);
+    onUpdateNode(node.id, updatedNode, "add-dependency", false);
   };
 
   const handleRemoveDependency = (dependencyId: TechNodeId) => {
@@ -187,7 +133,7 @@ export function NodeViewer({
       ...node,
       dependsOn: node.dependsOn.filter((id) => id !== dependencyId),
     };
-    onUpdateNode(node.id, updatedNode);
+    onUpdateNode(node.id, updatedNode, "remove-dependency", false);
   };
 
   const handleDelete = () => {
@@ -231,10 +177,10 @@ export function NodeViewer({
         {editing ? (
           <input
             type="text"
-            value={editedTitle}
+            value={node.title}
             autoComplete="off"
             autoFocus={true}
-            onChange={(e) => handleTitleChange(e.target.value)}
+            onChange={(e) => handleSetTitle(e.target.value)}
             className="flex-1 text-lg font-semibold text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none mr-2"
             placeholder="Node title..."
           />
@@ -301,8 +247,8 @@ export function NodeViewer({
         <div className="mb-12">
           {editing ? (
             <textarea
-              value={editedDescription}
-              onChange={(e) => handleDescriptionChange(e.target.value)}
+              value={node.description}
+              onChange={(e) => handleSetDescription(e.target.value)}
               className="w-full h-32 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
               placeholder="Node markdown description..."
             />
@@ -420,12 +366,6 @@ export function NodeViewer({
         )}
       </div>
 
-      {showAddNodeModal && (
-        <AddNodeModal
-          onClose={() => setShowAddNodeModal(false)}
-          onAdd={onAddNewDependsOn}
-        />
-      )}
       {showNodePicker && (
         <NodePickerModal
           nodes={availableNodes}

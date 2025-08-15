@@ -40,16 +40,13 @@ function mermaidGraph(tree: TechTree): string {
   return mermaid;
 }
 
-interface SubgraphProps {
-  subTree: TechTree;
-  fullTree: TechTree;
+interface GraphProps {
+  tree: TechTree;
   selectedNodeId: TechNodeId | null;
   onNodeSelect: (nodeId: TechNodeId | null) => void;
-  onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
-  onDeleteNode: (nodeId: TechNodeId) => void;
 }
 
-export function Subgraph(props: SubgraphProps) {
+export function Graph(props: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -73,7 +70,7 @@ export function Subgraph(props: SubgraphProps) {
     (nodeId: string) => {
       // Convert sanitized ID back to original ID
       const originalNodeId = nodeId.replace(/_/g, "-");
-      const node = props.subTree.nodes.find(
+      const node = props.tree.nodes.find(
         (n) =>
           n.id === originalNodeId ||
           n.id.replace(/[^a-zA-Z0-9_]/g, "_") === nodeId,
@@ -82,14 +79,14 @@ export function Subgraph(props: SubgraphProps) {
         props.onNodeSelect(node.id);
       }
     },
-    [props.subTree, props.onNodeSelect],
+    [props.tree, props.onNodeSelect],
   );
 
   // Function to highlight the selected node
   const highlightSelectedNode = useCallback(() => {
     if (!containerRef.current || !props.selectedNodeId) return;
 
-    const selectedNode = props.subTree.nodes.find(
+    const selectedNode = props.tree.nodes.find(
       (n) => n.id === props.selectedNodeId,
     );
     if (!selectedNode) return;
@@ -119,14 +116,14 @@ export function Subgraph(props: SubgraphProps) {
         }
       }
     });
-  }, [props.selectedNodeId, props.subTree]);
+  }, [props.selectedNodeId, props.tree]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const renderGraph = async () => {
       try {
-        const mermaidSyntax = mermaidGraph(props.subTree);
+        const mermaidSyntax = mermaidGraph(props.tree);
         const { svg } = await mermaid.render(graphId, mermaidSyntax);
 
         if (containerRef.current) {
@@ -149,10 +146,10 @@ export function Subgraph(props: SubgraphProps) {
                 if (
                   rect &&
                   (!props.selectedNodeId ||
-                    !props.subTree.nodes
+                    !props.tree.nodes
                       .find((n) => n.id === props.selectedNodeId)
                       ?.id.replace(/[^a-zA-Z0-9_]/g, "_") ||
-                    props.subTree.nodes
+                    props.tree.nodes
                       .find((n) => n.id === props.selectedNodeId)
                       ?.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
                 ) {
@@ -167,10 +164,10 @@ export function Subgraph(props: SubgraphProps) {
                 if (
                   rect &&
                   (!props.selectedNodeId ||
-                    !props.subTree.nodes
+                    !props.tree.nodes
                       .find((n) => n.id === props.selectedNodeId)
                       ?.id.replace(/[^a-zA-Z0-9_]/g, "_") ||
-                    props.subTree.nodes
+                    props.tree.nodes
                       .find((n) => n.id === props.selectedNodeId)
                       ?.id.replace(/[^a-zA-Z0-9_]/g, "_") !== nodeId)
                 ) {
@@ -198,7 +195,7 @@ export function Subgraph(props: SubgraphProps) {
 
     renderGraph();
   }, [
-    props.subTree,
+    props.tree,
     graphId,
     handleNodeClick,
     props.selectedNodeId,

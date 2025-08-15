@@ -1,3 +1,7 @@
+export const KnownTrees = {
+  "turbo-encabulator": "./trees/turbo-encabulator.json",
+};
+
 export interface TechTree {
   nodes: TechNode[];
 }
@@ -14,6 +18,9 @@ export interface TechNode {
 
   // Markdown encoded string rendered when node is focused
   description: string;
+
+  // bugzilla.mozilla.org bug number
+  bugzillaNumber?: number;
 
   // All the other nodes that must be finished to unblock or complete this
   // node.
@@ -65,6 +72,13 @@ export function validate(tree: object): TechTree {
       throw new Error(`Node ${node.id} must have a string description`);
     }
 
+    if (
+      node.bugzillaNumber !== undefined &&
+      typeof node.bugzillaNumber !== "number"
+    ) {
+      throw new Error(`Node ${node.id} must have a number bugzillaNumber`);
+    }
+
     if (!Array.isArray(node.dependsOn)) {
       throw new Error(`Node ${node.id} dependsOn must be an array`);
     }
@@ -110,6 +124,7 @@ export function clone(tree: TechTree): TechTree {
       id: node.id,
       title: node.title,
       description: node.description,
+      bugzillaNumber: node.bugzillaNumber,
       dependsOn: [...node.dependsOn],
       dependedOnBy: [...node.dependedOnBy],
     })),
