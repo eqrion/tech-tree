@@ -120,6 +120,14 @@ export function NodeViewer({
     onUpdateNode(node.id, updatedNode, "set-description", true);
   };
 
+  const handleSetBugzillaNumber = (bugzillaNumber: number | undefined) => {
+    const updatedNode = {
+      ...node,
+      bugzillaNumber: bugzillaNumber,
+    };
+    onUpdateNode(node.id, updatedNode, "set-bugzilla-number", true);
+  };
+
   const handleAddDependency = (dependencyId: TechNodeId) => {
     const updatedNode = {
       ...node,
@@ -254,6 +262,37 @@ export function NodeViewer({
             />
           ) : (
             <Markdown text={node.description} />
+          )}
+        </div>
+
+        <div className="mb-8">
+          <h4 className="font-semibold text-gray-900 mb-2">Bugzilla:</h4>
+          {editing ? (
+            <input
+              type="text"
+              value={node.bugzillaNumber || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                handleSetBugzillaNumber(value ? parseInt(value, 10) : undefined);
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Bugzilla bug number..."
+            />
+          ) : (
+            <div>
+              {node.bugzillaNumber ? (
+                <a
+                  href={`https://bugzilla.mozilla.org/show_bug.cgi?id=${node.bugzillaNumber}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Bug {node.bugzillaNumber}
+                </a>
+              ) : (
+                <span className="text-gray-500 text-sm">No bug assigned</span>
+              )}
+            </div>
           )}
         </div>
 
