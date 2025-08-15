@@ -256,3 +256,32 @@ export function subgraph(tree: TechTree, root: TechNodeId): TechTree {
     nodes: filteredNodes,
   };
 }
+
+export function generateId(title: string): TechNodeId {
+  const id = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return id;
+}
+
+export function generateTitle(tree: TechTree, blocking: TechNodeId | null) {
+  let blockingNode = tree.nodes.find((n) => n.id === blocking);
+  const baseName = blockingNode ? `Blocking ${blockingNode.title}` : "Node";
+  let newName = baseName;
+  let counter = 1;
+
+  // Check for existing nodes with the same name
+  const existingNames = new Set<string>();
+  for (const node of tree.nodes) {
+    existingNames.add(node.title);
+  }
+
+  // Generate a unique name
+  while (existingNames.has(newName)) {
+    newName = `${baseName} ${counter}`;
+    counter++;
+  }
+
+  return newName;
+}

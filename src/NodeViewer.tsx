@@ -74,7 +74,7 @@ interface NodeViewerProps {
   onClose: () => void;
   onRootSelect: (nodeId: TechNodeId) => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
-  onAddNode: (title: string, description: string) => TechNode | null;
+  onAddNewDependsOn: () => void;
   onUpdateNode: (previousId: TechNodeId, newNode: TechNode) => void;
   onDeleteNode: (id: TechNodeId) => void;
 }
@@ -86,7 +86,7 @@ export function NodeViewer({
   onClose,
   onRootSelect,
   onNodeSelect,
-  onAddNode,
+  onAddNewDependsOn,
   onUpdateNode,
   onDeleteNode,
 }: NodeViewerProps) {
@@ -112,10 +112,7 @@ export function NodeViewer({
 
       updateTimeoutRef.current = setTimeout(() => {
         // Generate new ID from title
-        const newId = title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
+        const newId = generateId(title);
 
         const updatedNode = {
           ...node,
@@ -125,7 +122,7 @@ export function NodeViewer({
         };
 
         onUpdateNode(node.id, updatedNode);
-      }, 500); // 500ms debounce
+      }, 2000);
     },
     [node, onUpdateNode],
   );
@@ -235,6 +232,8 @@ export function NodeViewer({
           <input
             type="text"
             value={editedTitle}
+            autoComplete="off"
+            autoFocus={true}
             onChange={(e) => handleTitleChange(e.target.value)}
             className="flex-1 text-lg font-semibold text-gray-900 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none mr-2"
             placeholder="Node title..."
@@ -314,7 +313,7 @@ export function NodeViewer({
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-gray-900">Dependencies:</h4>
+            <h4 className="font-semibold text-gray-900">Depends On:</h4>
           </div>
 
           {node.dependsOn.length > 0 ? (
@@ -370,18 +369,26 @@ export function NodeViewer({
           )}
 
           {editing && (
-            <button
-              onClick={() => {
-                if (availableNodes.length === 0) {
-                  setShowAddNodeModal(true);
-                } else {
-                  setShowNodePicker(true);
-                }
-              }}
-              className="mt-8 w-full px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
-            >
-              {"Add Dependency"}
-            </button>
+            <div className="mt-8 flex gap-2">
+              <button
+                onClick={() => {
+                  if (availableNodes.length === 0) {
+                    onAddNewDependsOn();
+                  } else {
+                    setShowNodePicker(true);
+                  }
+                }}
+                className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+              >
+                {"Add Existing"}
+              </button>
+              <button
+                onClick={onAddNewDependsOn}
+                className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+              >
+                {"Add New"}
+              </button>
+            </div>
           )}
         </div>
 
@@ -416,7 +423,7 @@ export function NodeViewer({
       {showAddNodeModal && (
         <AddNodeModal
           onClose={() => setShowAddNodeModal(false)}
-          onAdd={onAddNode}
+          onAdd={onAddNewDependsOn}
         />
       )}
       {showNodePicker && (
@@ -424,7 +431,7 @@ export function NodeViewer({
           nodes={availableNodes}
           editing={editing}
           onPickNode={handleAddDependency}
-          onAddNode={onAddNode}
+          onAddNode={onAddNewDependsOn}
           onClose={() => setShowNodePicker(false)}
         />
       )}

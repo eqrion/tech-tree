@@ -13,6 +13,8 @@ import {
   updateRefsToId,
   deleteRefsToId,
   findRootNodeOf,
+  generateId,
+  generateTitle,
 } from "./TechTree.js";
 import { Splitter } from "./Splitter.js";
 import Hamburger from "./Hamburger.js";
@@ -219,6 +221,7 @@ function LoadedApp() {
     if (!tree.nodes.find((x) => x.id === rootNodeId)) {
       setRootNodeId(null);
       setSelectedNodeId(null);
+      return null;
     }
     return subgraph(tree, rootNodeId);
   }, [tree, rootNodeId]);
@@ -245,16 +248,22 @@ function LoadedApp() {
   const updateNode = (previousId: TechNodeId, newNode: TechNode) => {
     try {
       let newTree = clone(tree);
-      let newIndex = newTree.nodes.findIndex((v) => v.id === newNode.id);
-      if (newIndex === -1) {
+      let existingIndex = newTree.nodes.findIndex((v) => v.id === previousId);
+      if (existingIndex === -1) {
         newTree.nodes.push(newNode);
       } else {
-        newTree.nodes[newIndex] = newNode;
+        newTree.nodes[existingIndex] = newNode;
       }
       updateRefsToId(newTree, previousId, newNode.id);
       newTree = validate(newTree);
       let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1)];
       let newTreeIndex = newTreeHistory.length;
+      if (selectedNodeId === previousId) {
+        setSelectedNodeId(newNode.id);
+      }
+      if (rootNodeId === previousId) {
+        setRootNodeId(newNode.id);
+      }
       setTreeHistory([...newTreeHistory, newTree]);
       setTreeIndex(newTreeIndex);
     } catch (err) {
@@ -288,33 +297,31 @@ function LoadedApp() {
     }
   };
 
-  const addNode = (title: string, description: string) => {
+  const addNode = () => {
     let blocking: null | TechNodeId = null;
     if (selectedNodeId) {
       blocking = selectedNodeId;
     } else if (rootNodeId) {
       blocking = rootNodeId;
     }
+    let title = generateTitle(tree, blocking);
+    let id = generateId(title);
+
+    // Check if node with this ID already exists
+    if (tree.nodes.find((node) => node.id === id)) {
+      setError(
+        `A node with the ID "${id}" already exists. Please choose a different title.`,
+      );
+      return null;
+    }
 
     try {
       let newTree = clone(tree);
-      const id = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-
-      // Check if node with this ID already exists
-      if (newTree.nodes.find((node) => node.id === id)) {
-        setError(
-          `A node with the ID "${id}" already exists. Please choose a different title.`,
-        );
-        return null;
-      }
 
       const newNode: TechNode = {
         id,
         title,
-        description,
+        description: "",
         dependsOn: [],
         dependedOnBy: [],
       };
@@ -331,10 +338,8 @@ function LoadedApp() {
       setTreeIndex(newTreeIndex);
       if (!rootNodeId) {
         setRootNodeId(newNode.id);
-        setSelectedNodeId(newNode.id);
-      } else if (!selectedNodeId) {
-        setSelectedNodeId(newNode.id);
       }
+      setSelectedNodeId(newNode.id);
 
       return newNode;
     } catch (err) {
@@ -574,7 +579,7 @@ function LoadedApp() {
             onClose={() => setSelectedNodeId(null)}
             onRootSelect={setRootNodeId}
             onNodeSelect={setSelectedNodeId}
-            onAddNode={addNode}
+            onAddNewDependsOn={addNode}
             onUpdateNode={updateNode}
             onDeleteNode={deleteNode}
           />
