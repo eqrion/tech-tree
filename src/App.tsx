@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { type TechTree, validate, KnownTrees } from "./TechTree.js";
+import { type TechTree, validate, getKnownTreeUrl } from "./TechTree.js";
 import { getUrlParameter, updateUrlParameters } from "./UrlParams.js";
 import { TechTreeViewer } from "./TechTreeViewer.js";
 import { ErrorPopup } from "./ErrorPopup.js";
@@ -75,13 +75,7 @@ export function AppInner() {
   let [loading, setLoading] = useState<boolean>(false);
 
   let loadKnown = (knownTree: string) => {
-    const knownTreeUrl = KnownTrees[knownTree as keyof typeof KnownTrees];
-    if (!knownTreeUrl) {
-      console.error("Unknown tech tree:", knownTree);
-      setError(`Unknown tech tree: ${knownTree}`);
-      return;
-    }
-
+    const knownTreeUrl = getKnownTreeUrl(knownTree);
     setLoading(true);
     updateUrlParameters({ tree: knownTree });
     fetchTreeFromUrl(knownTreeUrl)

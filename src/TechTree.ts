@@ -1,6 +1,22 @@
-export const KnownTrees = {
-  "turbo-encabulator": "./trees/turbo-encabulator.json",
-};
+export const TechTreesRepo =
+  "https://raw.githubusercontent.com/eqrion/tech-trees/refs/heads/main";
+
+export function getKnownTreeUrl(known: string) {
+  return TechTreesRepo + "/" + known + ".json";
+}
+
+export async function getKnownTrees(): Promise<string[]> {
+  // fetch manifest json
+  const response = await fetch(`${TechTreesRepo}/manifest.json`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch known trees: ${response.statusText}`);
+  }
+  const data = await response.json();
+  if (!Array.isArray(data) || !data.every((item) => typeof item === "string")) {
+    throw new Error("Manifest must be an array of strings");
+  }
+  return data;
+}
 
 export interface TechTree {
   nodes: TechNode[];

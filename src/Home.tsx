@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { type TechTree, KnownTrees, validate } from "./TechTree.js";
+import React, { useState, useEffect } from "react";
+import { type TechTree, getKnownTrees, validate } from "./TechTree.js";
 
 interface HomeProps {
   onOpen: (tree: TechTree) => void;
@@ -9,9 +9,19 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = (props: HomeProps) => {
   const [selectedTechTree, setSelectedTechTree] = useState("");
+  const [knownTrees, setKnownTrees] = useState<string[]>([]);
 
-  // Sample tech trees - replace with actual data source
-  const availableTechTrees = Object.entries(KnownTrees);
+  useEffect(() => {
+    const fetchKnownTrees = async () => {
+      try {
+        const trees = await getKnownTrees();
+        setKnownTrees(trees);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchKnownTrees();
+  }, []);
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -54,7 +64,7 @@ const Home: React.FC<HomeProps> = (props: HomeProps) => {
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Choose...</option>
-            {availableTechTrees.map(([id, _]) => (
+            {knownTrees.map((id) => (
               <option key={id} value={id}>
                 {id}
               </option>
