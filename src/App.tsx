@@ -670,7 +670,7 @@ function LoadedApp() {
             </button>
           )}
           {/* History controls */}
-          <div className="flex items-center gap-1 mr-2">
+          {(editing || treeIndex !== 0) && <div className="flex items-center gap-1 mr-2">
             {treeIndex !== 0 && (
               <div className="px-3 py-1 text-xs bg-orange-100 text-orange-700 border border-orange-200 rounded mr-2 flex items-center gap-1">
                 <svg
@@ -713,7 +713,7 @@ function LoadedApp() {
             >
               Redo
             </button>
-          </div>
+          </div>}
 
           <button
             onClick={() => setEditing(!editing)}
@@ -801,7 +801,7 @@ function NodePicker(props: NodePickerProps) {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           {/* Search Box */}
-          <div className="flex-grow relative mx-6">
+          <div className="flex-grow relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg
                 className="h-5 w-5 text-gray-400"
@@ -828,7 +828,7 @@ function NodePicker(props: NodePickerProps) {
           {props.editing && (
             <button
               onClick={() => setShowAddNodeModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              className="ml-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
               Add
             </button>
