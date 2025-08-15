@@ -205,7 +205,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
       blocking = rootNodeId;
     }
     let title = generateTitle(tree, blocking);
-    let id = generateId(title);
+    let id = generateId(tree, title);
 
     // Check if node with this ID already exists
     if (tree.nodes.find((node) => node.id === id)) {

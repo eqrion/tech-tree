@@ -288,11 +288,14 @@ export function subgraph(tree: TechTree, root: TechNodeId): TechTree {
   };
 }
 
-export function generateId(title: string): TechNodeId {
+export function generateId(tree: TechTree, title: string): TechNodeId {
   const id = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+  if (!id) {
+    return generateId(tree, generateTitle(tree, ""));
+  }
   return id;
 }
 
