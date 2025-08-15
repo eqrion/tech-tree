@@ -46,7 +46,7 @@ const Home: React.FC<HomeProps> = (props: HomeProps) => {
         {/* Header with favicon and title */}
         <div className="text-center mb-8">
           <img
-            src="/favicon.svg"
+            src="./favicon.svg"
             alt="Tech Tree"
             className="w-16 h-16 mx-auto mb-4"
           />
