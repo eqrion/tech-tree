@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { type TechTree, type TechNode, type TechNodeId } from "./TechTree.js";
+import { type TechTree, type TechNode, type TechNodeId, generateId } from "./TechTree.js";
 import { Modal } from "./Modal.js";
 import { Markdown } from "./Markdown.js";
 import { NodePickerModal } from "./NodePicker.js";
