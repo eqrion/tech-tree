@@ -307,6 +307,11 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
+              if (treeIndex !== 0) {
+                if (!confirm("You have unsaved changes. Are you sure you want to go back?")) {
+                  return;
+                }
+              }
               e.preventDefault();
               props.onBack();
             }}
