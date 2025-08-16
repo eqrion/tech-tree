@@ -4,7 +4,7 @@ import type { TechTree, TechNode, TechNodeId } from "./TechTree.js";
 import mermaid from "mermaid";
 
 function mermaidGraph(tree: TechTree): string {
-  let mermaid = "graph TD\n";
+  let mermaid = "graph LR\n";
 
   // Check if any nodes have external dependencies
   const nodeIds = new Set(tree.nodes.map((node) => node.id));
