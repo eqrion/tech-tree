@@ -48,6 +48,7 @@ interface GraphProps {
 
 export function Graph(props: GraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -207,11 +208,23 @@ export function Graph(props: GraphProps) {
     highlightSelectedNode();
   }, [highlightSelectedNode]);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setScale((prev) => Math.max(0.1, Math.min(3, prev * delta)));
   }, []);
+
+  // Add wheel event listener with ref
+  useEffect(() => {
+    const element = graphContainerRef.current;
+    if (!element) return;
+
+    element.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -273,8 +286,8 @@ export function Graph(props: GraphProps) {
 
       {/* Graph Container */}
       <div
+        ref={graphContainerRef}
         className={`w-full h-full cursor-grab active:cursor-grabbing ${props.selectedNodeId ? "pr-80" : ""}`}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

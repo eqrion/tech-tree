@@ -95,7 +95,7 @@ export const Splitter: React.FC<SplitterProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`flex ${isHorizontal ? "flex-row" : "flex-col"} h-full w-full ${className}`}
+      className={`flex ${isHorizontal ? "flex-row" : "flex-col"} ${className}`}
     >
       {/* First Panel */}
       <div style={firstPanelStyle} className="overflow-hidden">

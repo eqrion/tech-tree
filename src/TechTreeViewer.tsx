@@ -308,7 +308,11 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
             rel="noopener noreferrer"
             onClick={(e) => {
               if (treeIndex !== 0) {
-                if (!confirm("You have unsaved changes. Are you sure you want to go back?")) {
+                if (
+                  !confirm(
+                    "You have unsaved changes. Are you sure you want to go back?",
+                  )
+                ) {
                   return;
                 }
               }
@@ -390,7 +394,11 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
           <Hamburger menuItems={menuItems} />
         </div>
       </div>
-      <Splitter direction="horizontal" initialSplit={66} className="flex-1">
+      <Splitter
+        direction="horizontal"
+        initialSplit={66}
+        className="flex-1 w-full overflow-hidden"
+      >
         <div className="bg-gray-50 w-full h-full">
           {!rootNodeId && (
             <NodePicker
