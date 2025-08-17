@@ -3,8 +3,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { TechTree, TechNode, TechNodeId } from "./TechTree.js";
 import mermaid from "mermaid";
 
-function mermaidGraph(tree: TechTree): string {
-  let mermaid = "graph LR\n";
+function mermaidGraph(tree: TechTree, topDown: boolean): string {
+  let mermaid = `graph ${topDown ? "TD" : "LR"}\n`;
 
   // Check if any nodes have external dependencies
   const nodeIds = new Set(tree.nodes.map((node) => node.id));
@@ -53,6 +53,7 @@ export function Graph(props: GraphProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [topDown, setTopDown] = useState(false);
   const [graphId] = useState(
     () => `graph-${Math.random().toString(36).substr(2, 9)}`,
   );
@@ -124,7 +125,7 @@ export function Graph(props: GraphProps) {
 
     const renderGraph = async () => {
       try {
-        const mermaidSyntax = mermaidGraph(props.tree);
+        const mermaidSyntax = mermaidGraph(props.tree, topDown);
         const { svg } = await mermaid.render(graphId, mermaidSyntax);
 
         if (containerRef.current) {
@@ -201,6 +202,7 @@ export function Graph(props: GraphProps) {
     handleNodeClick,
     props.selectedNodeId,
     highlightSelectedNode,
+    topDown,
   ]);
 
   // Update highlighting when selected node changes
@@ -257,6 +259,10 @@ export function Graph(props: GraphProps) {
     setPosition({ x: 0, y: 0 });
   }, []);
 
+  const toggleTopDown = useCallback(() => {
+    setTopDown(!topDown);
+  }, [topDown]);
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-gray-50">
       {/* Controls */}
@@ -281,6 +287,13 @@ export function Graph(props: GraphProps) {
           title="Reset View"
         >
           Reset
+        </button>
+        <button
+          onClick={toggleTopDown}
+          className="px-3 py-2 bg-white border rounded shadow hover:bg-gray-50"
+          title="Toggle Layout"
+        >
+          {topDown ? "TD" : "LR"}
         </button>
       </div>
 
