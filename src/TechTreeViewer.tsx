@@ -84,6 +84,21 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
     });
   }, [rootNodeId, selectedNodeId]);
 
+  // Warn user before navigating away if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (treeIndex !== 0) {
+        const message = "You have unsaved changes. Are you sure you want to leave?";
+        e.preventDefault();
+        e.returnValue = message; // Required for Chrome
+        return message; // Required for some browsers
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [treeIndex]);
+
   const subtree = useMemo(() => {
     if (rootNodeId === null) {
       return null;
@@ -307,6 +322,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
+              e.preventDefault();
               if (treeIndex !== 0) {
                 if (
                   !confirm(
@@ -316,7 +332,6 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
                   return;
                 }
               }
-              e.preventDefault();
               props.onBack();
             }}
             className="text-xl font-semibold text-gray-900 hover:text-blue-900 transition-colors hover:underline"
