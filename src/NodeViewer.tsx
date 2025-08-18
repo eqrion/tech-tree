@@ -65,22 +65,28 @@ export function NodeViewer({
     onUpdateNode(node.id, updatedNode, "set-bugzilla-number", true);
   };
 
-  const handleAddDependency = (dependencyId: TechNodeId) => {
-    // TODO: fix this after inverting the tree
+  const handleAddBlocks = (blocksId: TechNodeId) => {
+    let blocks = fullTree.nodes.find((x) => x.id === blocksId);
+    if (!blocks) {
+      return;
+    }
     const updatedNode = {
-      ...node,
-      dependsOn: [...node.dependsOn, dependencyId],
+      ...blocks,
+      dependsOn: [...blocks.dependsOn, node.id],
     };
-    onUpdateNode(node.id, updatedNode, "add-dependency", false);
+    onUpdateNode(blocksId, updatedNode, "add-dependency", false);
   };
 
-  const handleRemoveDependency = (dependencyId: TechNodeId) => {
-    // TODO: fix this after inverting the tree
+  const handleRemoveBlocks = (blocksId: TechNodeId) => {
+    let blocks = fullTree.nodes.find((x) => x.id === blocksId);
+    if (!blocks) {
+      return;
+    }
     const updatedNode = {
-      ...node,
-      dependsOn: node.dependsOn.filter((id) => id !== dependencyId),
+      ...blocks,
+      dependsOn: blocks.dependsOn.filter((id) => id !== node.id),
     };
-    onUpdateNode(node.id, updatedNode, "remove-dependency", false);
+    onUpdateNode(blocksId, updatedNode, "remove-dependency", false);
   };
 
   const handleDelete = () => {
@@ -266,7 +272,7 @@ export function NodeViewer({
                     </div>
                     {editing && (
                       <button
-                        onClick={() => handleRemoveDependency(depId)}
+                        onClick={() => handleRemoveBlocks(depId)}
                         className="ml-2 text-red-500 hover:text-red-700"
                         title="Remove dependency"
                       >
@@ -349,7 +355,7 @@ export function NodeViewer({
         <NodePickerModal
           nodes={availableNodes}
           editing={editing}
-          onPickNode={handleAddDependency}
+          onPickNode={handleAddBlocks}
           onAddNode={onAddNewDependedOnBy}
           onClose={() => setShowNodePicker(false)}
         />
