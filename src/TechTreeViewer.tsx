@@ -213,13 +213,13 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
   };
 
   const addNode = () => {
-    let blocking: null | TechNodeId = null;
+    let blockedBy: null | TechNodeId = null;
     if (selectedNodeId) {
-      blocking = selectedNodeId;
+      blockedBy = selectedNodeId;
     } else if (rootNodeId) {
-      blocking = rootNodeId;
+      blockedBy = rootNodeId;
     }
-    let title = generateTitle(tree, blocking);
+    let title = generateTitle(tree, blockedBy);
     let id = generateId(tree, title);
 
     // Check if node with this ID already exists
@@ -241,9 +241,9 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
         dependedOnBy: [],
       };
       newTree.nodes.push(newNode);
-      if (blocking !== null) {
-        newTree.nodes.find((x) => x.id === blocking)?.dependsOn.push(id);
-        newNode.dependedOnBy.push(blocking);
+      if (blockedBy !== null) {
+        newTree.nodes.find((x) => x.id === blockedBy)?.dependedOnBy.push(id);
+        newNode.dependsOn.push(blockedBy);
       }
       newTree = validateAndComputeImplicit(newTree);
 
@@ -440,7 +440,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
             onClose={() => setSelectedNodeId(null)}
             onRootSelect={setRootNodeId}
             onNodeSelect={setSelectedNodeId}
-            onAddNewDependsOn={addNode}
+            onAddNewDependedOnBy={addNode}
             onUpdateNode={updateNode}
             onDeleteNode={deleteNode}
           />

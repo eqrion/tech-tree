@@ -295,9 +295,9 @@ export function generateId(tree: TechTree, title: string): TechNodeId {
   return id;
 }
 
-export function generateTitle(tree: TechTree, blocking: TechNodeId | null) {
-  let blockingNode = tree.nodes.find((n) => n.id === blocking);
-  const baseName = blockingNode ? `Blocking ${blockingNode.title}` : "Node";
+export function generateTitle(tree: TechTree, blockedBy: TechNodeId | null) {
+  let blockedByNode = tree.nodes.find((n) => n.id === blockedBy);
+  const baseName = blockedByNode ? `Blocked by ${blockedByNode.title}` : "Node";
   let newName = baseName;
   let counter = 1;
 

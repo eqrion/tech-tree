@@ -6,7 +6,6 @@ import {
   type TechNodeId,
   generateId,
 } from "./TechTree.js";
-import { Modal } from "./Modal.js";
 import { Markdown } from "./Markdown.js";
 import { NodePickerModal } from "./NodePicker.js";
 
@@ -17,7 +16,7 @@ interface NodeViewerProps {
   onClose: () => void;
   onRootSelect: (nodeId: TechNodeId) => void;
   onNodeSelect: (nodeId: TechNodeId) => void;
-  onAddNewDependsOn: () => void;
+  onAddNewDependedOnBy: () => void;
   onUpdateNode: (
     previousId: TechNodeId,
     newNode: TechNode,
@@ -34,7 +33,7 @@ export function NodeViewer({
   onClose,
   onRootSelect,
   onNodeSelect,
-  onAddNewDependsOn,
+  onAddNewDependedOnBy,
   onUpdateNode,
   onDeleteNode,
 }: NodeViewerProps) {
@@ -237,12 +236,12 @@ export function NodeViewer({
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-semibold text-gray-900">Depends On:</h4>
+            <h4 className="font-semibold text-gray-900">Blocks:</h4>
           </div>
 
-          {node.dependsOn.length > 0 ? (
+          {node.dependedOnBy.length > 0 ? (
             <ul className="list-disc list-inside space-y-1">
-              {node.dependsOn.map((depId) => {
+              {node.dependedOnBy.map((depId) => {
                 const depNode = fullTree.nodes.find((n) => n.id === depId);
                 return (
                   <li
@@ -289,7 +288,7 @@ export function NodeViewer({
               })}
             </ul>
           ) : (
-            <p className="text-gray-500 text-sm">No dependencies</p>
+            <p className="text-gray-500 text-sm">Not blocking anything</p>
           )}
 
           {editing && (
@@ -297,7 +296,7 @@ export function NodeViewer({
               <button
                 onClick={() => {
                   if (availableNodes.length === 0) {
-                    onAddNewDependsOn();
+                    onAddNewDependedOnBy();
                   } else {
                     setShowNodePicker(true);
                   }
@@ -307,7 +306,7 @@ export function NodeViewer({
                 {"Add Existing"}
               </button>
               <button
-                onClick={onAddNewDependsOn}
+                onClick={onAddNewDependedOnBy}
                 className="flex-1 px-3 py-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
               >
                 {"Add New"}
@@ -316,11 +315,11 @@ export function NodeViewer({
           )}
         </div>
 
-        {node.dependedOnBy && node.dependedOnBy.length > 0 && (
+        {node.dependsOn && node.dependsOn.length > 0 && (
           <div>
-            <h4 className="font-semibold text-gray-900 mb-2">Blocks:</h4>
+            <h4 className="font-semibold text-gray-900 mb-2">Requires:</h4>
             <ul className="list-disc list-inside space-y-1">
-              {node.dependedOnBy.map((depId) => {
+              {node.dependsOn.map((depId) => {
                 const depNode = fullTree.nodes.find((n) => n.id === depId);
                 return (
                   <li key={depId} className="text-gray-600 text-sm">
@@ -349,7 +348,7 @@ export function NodeViewer({
           nodes={availableNodes}
           editing={editing}
           onPickNode={handleAddDependency}
-          onAddNode={onAddNewDependsOn}
+          onAddNode={onAddNewDependedOnBy}
           onClose={() => setShowNodePicker(false)}
         />
       )}
