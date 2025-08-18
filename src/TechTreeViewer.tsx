@@ -304,7 +304,18 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
   const menuItems = [
     {
       label: "New",
-      onClick: props.onNewTree,
+      onClick: () => {
+        if (treeIndex !== 0) {
+          if (
+            !confirm(
+              "You have unsaved changes. Are you sure you want to create a new tree?",
+            )
+          ) {
+            return;
+          }
+        }
+        props.onNewTree();
+      },
     },
     {
       label: "Download",

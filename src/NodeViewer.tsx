@@ -66,6 +66,7 @@ export function NodeViewer({
   };
 
   const handleAddDependency = (dependencyId: TechNodeId) => {
+    // TODO: fix this after inverting the tree
     const updatedNode = {
       ...node,
       dependsOn: [...node.dependsOn, dependencyId],
@@ -74,6 +75,7 @@ export function NodeViewer({
   };
 
   const handleRemoveDependency = (dependencyId: TechNodeId) => {
+    // TODO: fix this after inverting the tree
     const updatedNode = {
       ...node,
       dependsOn: node.dependsOn.filter((id) => id !== dependencyId),
