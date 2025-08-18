@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { type TechTree, getKnownTrees, validate } from "./TechTree.js";
+import { type TechTree, getKnownTrees, validateAndComputeImplicit } from "./TechTree.js";
 
 interface HomeProps {
   onOpen: (tree: TechTree) => void;
@@ -29,7 +29,7 @@ const Home: React.FC<HomeProps> = (props: HomeProps) => {
     const file = event.target.files?.[0];
     if (file) {
       const text = await file.text();
-      const tree = validate(JSON.parse(text));
+      const tree = validateAndComputeImplicit(JSON.parse(text));
       props.onOpen(tree);
     }
   };

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { type TechTree, validate, getKnownTreeUrl } from "./TechTree.js";
+import { type TechTree, validateAndComputeImplicit, getKnownTreeUrl } from "./TechTree.js";
 import { getUrlParameter, updateUrlParameters } from "./UrlParams.js";
 import { TechTreeViewer } from "./TechTreeViewer.js";
 import { ErrorPopup } from "./ErrorPopup.js";
@@ -167,7 +167,7 @@ async function fetchTreeFromUrl(url: string): Promise<TechTree> {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     const data = await response.json();
-    return validate(data);
+    return validateAndComputeImplicit(data);
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`Failed to load from URL: ${error.message}`);

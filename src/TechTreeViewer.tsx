@@ -3,12 +3,12 @@ import { useState, useEffect, useMemo } from "react";
 import {
   type TechTree,
   type TechNode,
-  validate,
+  validateAndComputeImplicit,
   type TechNodeId,
   rootNodes,
   subgraph,
   clone,
-  canonicalize,
+  canonicalizeForSerialization,
   updateRefsToId,
   deleteRefsToId,
   findRootNodeOf,
@@ -157,7 +157,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
       }
       updateRefsToId(newTree, previousId, newNode.id);
 
-      newTree = validate(newTree);
+      newTree = validateAndComputeImplicit(newTree);
 
       let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1)];
       let newTreeIndex = newTreeHistory.length - 1;
@@ -190,7 +190,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
       let oldIndex = newTree.nodes.findIndex((x) => x.id === id);
       newTree.nodes.splice(oldIndex, 1);
       deleteRefsToId(newTree, id);
-      newTree = validate(newTree);
+      newTree = validateAndComputeImplicit(newTree);
 
       let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1), newTree];
       let newTreeIndex = newTreeHistory.length - 1;
@@ -245,7 +245,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
         newTree.nodes.find((x) => x.id === blocking)?.dependsOn.push(id);
         newNode.dependedOnBy.push(blocking);
       }
-      newTree = validate(newTree);
+      newTree = validateAndComputeImplicit(newTree);
 
       let newTreeHistory = [...treeHistory.slice(0, treeIndex + 1), newTree];
       let newTreeIndex = newTreeHistory.length - 1;
@@ -267,7 +267,7 @@ export function TechTreeViewer(props: TechTreeViewerProps) {
   };
 
   const saveToFile = () => {
-    const dataStr = JSON.stringify(canonicalize(tree), null, 2);
+    const dataStr = JSON.stringify(canonicalizeForSerialization(tree), null, 2);
     const dataBlob = new Blob([dataStr], { type: "application/json" });
 
     const link = document.createElement("a");

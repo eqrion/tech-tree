@@ -20,7 +20,7 @@ function mermaidGraph(tree: TechTree, topDown: boolean): string {
   // Add dependencies as edges
   for (const node of tree.nodes) {
     const sanitizedNodeId = node.id.replace(/[^a-zA-Z0-9_]/g, "_");
-    for (const dep of node.dependsOn) {
+    for (const dep of node.dependedOnBy) {
       const sanitizedDepId = dep.replace(/[^a-zA-Z0-9_]/g, "_");
       mermaid += `    ${sanitizedNodeId} --> ${sanitizedDepId}\n`;
     }
@@ -29,8 +29,8 @@ function mermaidGraph(tree: TechTree, topDown: boolean): string {
   // Style nodes with external dependents differently
   for (const node of tree.nodes) {
     if (
-      node.dependedOnBy &&
-      node.dependedOnBy.some((depId) => !nodeIds.has(depId))
+      node.dependsOn &&
+      node.dependsOn.some((depId) => !nodeIds.has(depId))
     ) {
       const sanitizedId = node.id.replace(/[^a-zA-Z0-9_]/g, "_");
       mermaid += `    style ${sanitizedId} fill:#e0f2fe,stroke:#0277bd,stroke-width:3px,stroke-dasharray: 5 5\n`;

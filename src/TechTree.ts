@@ -24,8 +24,9 @@ export interface TechTree {
 
 export type TechNodeId = string;
 
-// A node in the tech tree. Represents a single project or work item.
-export interface TechNode {
+// A node in the tech tree. Represents a single project or work item. This is the
+// version serialized.
+export interface SerializedTechNode {
   // Internal id used for cross-references
   id: TechNodeId;
 
@@ -41,8 +42,12 @@ export interface TechNode {
   // All the other nodes that must be finished to unblock or complete this
   // node.
   dependsOn: TechNodeId[];
+}
 
+// A node in the tech tree, this is the version with computed properties.
+export interface TechNode extends SerializedTechNode {
   // All the nodes that depend on this node.
+  // This is computed by `validate` from `dependsOn`.
   dependedOnBy: TechNodeId[];
 }
 
@@ -50,7 +55,7 @@ export interface TechNode {
 // if it does not.
 //
 // This mutates the object in place to compute the 'dependedOnBy' nodes.
-export function validate(tree: object): TechTree {
+export function validateAndComputeImplicit(tree: object): TechTree {
   if (!tree || typeof tree !== "object") {
     throw new Error("TechTree must be an object");
   }
@@ -134,6 +139,17 @@ export function validate(tree: object): TechTree {
   return candidate as TechTree;
 }
 
+export function canonicalizeForSerialization(tree: TechTree): object {
+  tree = clone(tree);
+  tree.nodes.sort((a, b) => a.id.localeCompare(b.id));
+  // Sort dependency arrays by id
+  for (const node of tree.nodes) {
+    node.dependsOn.sort();
+    delete (node as {dependedOnBy?: TechNodeId[]}).dependedOnBy;
+  }
+  return tree;
+}
+
 export function clone(tree: TechTree): TechTree {
   return {
     nodes: tree.nodes.map((node) => ({
@@ -145,17 +161,6 @@ export function clone(tree: TechTree): TechTree {
       dependedOnBy: [...node.dependedOnBy],
     })),
   };
-}
-
-export function canonicalize(tree: TechTree): TechTree {
-  tree = clone(tree);
-  tree.nodes.sort((a, b) => a.id.localeCompare(b.id));
-  // Sort dependency arrays by id
-  for (const node of tree.nodes) {
-    node.dependsOn.sort();
-    node.dependedOnBy.sort();
-  }
-  return tree;
 }
 
 export function updateRefsToId(
@@ -190,19 +195,10 @@ export function deleteRefsToId(tree: TechTree, id: TechNodeId) {
   }
 }
 
-// All nodes which are not depended on by another node
+// All nodes which have no dependencies
 export function rootNodes(tree: TechTree): TechNode[] {
-  const dependedOnIds = new Set<TechNodeId>();
-
-  // Collect all node IDs that are dependencies
-  for (const node of tree.nodes) {
-    for (const dep of node.dependsOn) {
-      dependedOnIds.add(dep);
-    }
-  }
-
-  // Return nodes that are not depended on by any other node
-  return tree.nodes.filter((node) => !dependedOnIds.has(node.id));
+  // Return nodes that have no dependencies
+  return tree.nodes.filter((node) => node.dependsOn.length === 0);
 }
 
 // Try to find a root node of `node`
@@ -227,12 +223,12 @@ export function findRootNodeOf(
     }
 
     // If this node isn't depended on by anyone, it's a root
-    if (currentNode.dependedOnBy.length === 0) {
+    if (currentNode.dependsOn.length === 0) {
       return currentId;
     }
 
     // Add dependencies to stack to continue searching
-    for (const dep of currentNode.dependedOnBy) {
+    for (const dep of currentNode.dependsOn) {
       if (!visited.has(dep)) {
         stack.push(dep);
       }
@@ -272,7 +268,7 @@ export function subgraph(tree: TechTree, root: TechNodeId): TechTree {
     includedNodes.add(nodeId);
 
     // Recursively collect dependencies
-    for (const dep of node.dependsOn) {
+    for (const dep of node.dependedOnBy) {
       collectDependencies(dep);
     }
   }
