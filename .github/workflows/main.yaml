@@ -38,7 +38,7 @@ jobs:
 
   deploy:
     name: Deploy
-    if: github.ref == 'refs/heads/main' && github.repository_owner == 'eqrion'
+    if: github.ref == 'refs/heads/main' && github.repository_owner == 'mozilla-spidermonkey'
     needs: build
     permissions:
       pages: write

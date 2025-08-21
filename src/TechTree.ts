@@ -1,5 +1,5 @@
 export const TechTreesRepo =
-  "https://raw.githubusercontent.com/eqrion/tech-trees/refs/heads/main";
+  "https://raw.githubusercontent.com/mozilla-spidermonkey/tech-trees/refs/heads/main";
 
 export function getKnownTreeUrl(known: string) {
   return TechTreesRepo + "/" + known + ".json";
